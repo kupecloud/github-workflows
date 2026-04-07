@@ -1,0 +1,159 @@
+name: Go Lint
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        description: Path to the Go version file
+        required: false
+        default: go.mod
+        type: string
+      vendor:
+        description: Run go mod vendor before linting
+        required: false
+        default: false
+        type: boolean
+      golangci-args:
+        description: Arguments passed to golangci-lint
+        required: false
+        default: --timeout=10m
+        type: string
+      golangci-version:
+        description: golangci-lint version to install
+        required: false
+        default: v1.64.8
+        type: string
+      actionlint-version:
+        description: actionlint version to install
+        required: false
+        default: v1.7.12
+        type: string
+
+jobs:
+  golangci-lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: true
+
+      - name: Ensure vendor directory
+        if: inputs.vendor
+        run: go mod vendor
+
+      - name: Install golangci-lint
+        shell: bash
+        run: |
+          GOBIN="$RUNNER_TEMP/bin" go install github.com/golangci/golangci-lint/cmd/golangci-lint@${{ inputs.golangci-version }}
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run golangci-lint
+        id: golangci
+        run: golangci-lint run ${{ inputs.golangci-args }}
+
+      - name: golangci-lint summary
+        if: always()
+        run: |
+          if [ "${{ steps.golangci.outcome }}" = "success" ]; then
+            {
+              echo "Go linting passed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "Go linting failed."
+              echo ""
+              echo "- Review the job logs for full details."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  go-fmt:
+    name: gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: true
+
+      - name: Check formatting
+        id: gofmt
+        run: |
+          gofmt -l . > gofmt-files.txt
+          if [ -s gofmt-files.txt ]; then
+            echo "The following files are not formatted correctly:"
+            cat gofmt-files.txt
+            echo ""
+            echo "Please run 'gofmt -w .' to fix formatting."
+            exit 1
+          fi
+
+      - name: gofmt summary
+        if: always()
+        run: |
+          if [ "${{ steps.gofmt.outcome }}" = "success" ]; then
+            {
+              echo "Go formatting passed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "Go formatting failed."
+              echo ""
+              echo "\`\`\`"
+              if [ -s gofmt-files.txt ]; then
+                cat gofmt-files.txt
+              else
+                echo "No files captured."
+              fi
+              echo "\`\`\`"
+              echo "Please run \`gofmt -w .\` to fix formatting."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: true
+
+      - name: Install actionlint
+        shell: bash
+        run: |
+          GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@${{ inputs.actionlint-version }}
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run actionlint
+        id: actionlint
+        run: actionlint
+
+      - name: actionlint summary
+        if: always()
+        run: |
+          if [ "${{ steps.actionlint.outcome }}" = "success" ]; then
+            {
+              echo "### actionlint"
+              echo "actionlint passed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "actionlint failed."
+              echo ""
+              echo "- Review the job logs for details."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

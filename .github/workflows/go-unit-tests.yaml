@@ -1,0 +1,132 @@
+name: Go Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        description: Path to the Go version file
+        required: false
+        default: go.mod
+        type: string
+      vet-command:
+        description: Command used for go vet
+        required: false
+        default: go vet ./...
+        type: string
+      test-command:
+        description: Command used for go test
+        required: false
+        default: go test -json -race -coverprofile=coverage.out ./... | tee unit-tests.json
+        type: string
+      tidy-command:
+        description: Command used for go mod tidy validation
+        required: false
+        default: go mod tidy
+        type: string
+      check-go-mod-tidy:
+        description: Validate go mod tidy output
+        required: false
+        default: true
+        type: boolean
+      upload-coverage:
+        description: Upload coverage.out as an artifact when present
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  unit-tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: true
+
+      - name: Run go vet
+        id: govet
+        run: ${{ inputs.vet-command }}
+
+      - name: Run unit tests
+        id: unit
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          ${{ inputs.test-command }}
+          EXIT_CODE=$?
+          set +o pipefail
+          set -e
+          exit $EXIT_CODE
+
+      - name: Unit test summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f unit-tests.json ]; then
+            pass=$(awk -F'"' '/"Action":"pass"/ && /"Test":/ {count++} END {print count+0}' unit-tests.json)
+            fail=$(awk -F'"' '/"Action":"fail"/ && /"Test":/ {count++} END {print count+0}' unit-tests.json)
+            skip=$(awk -F'"' '/"Action":"skip"/ && /"Test":/ {count++} END {print count+0}' unit-tests.json)
+          else
+            pass=0
+            fail=0
+            skip=0
+          fi
+          total=$((pass + fail + skip))
+          coverage="n/a"
+          if [ -f coverage.out ]; then
+            coverage=$(go tool cover -func=coverage.out | awk 'END {print $3}')
+          fi
+          {
+            echo "### Unit tests"
+            echo ""
+            echo "| Metric | Count |"
+            echo "| --- | --- |"
+            echo "| Total | ${total} |"
+            echo "| Passed | ${pass} |"
+            echo "| Failed | ${fail} |"
+            echo "| Skipped | ${skip} |"
+            echo "| Coverage | ${coverage} |"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| go vet | ${{ steps.govet.outcome }} |"
+            echo "| go test | ${{ steps.unit.outcome }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: inputs.upload-coverage && always() && hashFiles('coverage.out') != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 7
+
+  go-mod-tidy:
+    name: Check go mod tidy
+    if: inputs.check-go-mod-tidy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: true
+
+      - name: Check go mod tidy
+        shell: bash
+        run: |
+          ${{ inputs.tidy-command }}
+          if ! git diff --quiet go.mod go.sum; then
+            echo "go.mod or go.sum is not tidy. Please run 'go mod tidy' and commit the changes."
+            git diff go.mod go.sum
+            exit 1
+          fi

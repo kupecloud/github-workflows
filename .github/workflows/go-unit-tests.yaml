@@ -124,9 +124,57 @@ jobs:
       - name: Check go mod tidy
         shell: bash
         run: |
+          set -euo pipefail
+
+          before_dir="$(mktemp -d)"
+          trap 'rm -rf "$before_dir"' EXIT
+
+          for file in go.mod go.sum; do
+            if [ -f "$file" ]; then
+              cp "$file" "$before_dir/$file"
+            fi
+          done
+
           ${{ inputs.tidy-command }}
-          if ! git diff --quiet go.mod go.sum; then
+
+          changed=0
+          for file in go.mod go.sum; do
+            before_file="$before_dir/$file"
+
+            if [ -f "$before_file" ] && [ -f "$file" ]; then
+              if ! cmp -s "$before_file" "$file"; then
+                changed=1
+                break
+              fi
+              continue
+            fi
+
+            if [ -f "$before_file" ] || [ -f "$file" ]; then
+              changed=1
+              break
+            fi
+          done
+
+          if [ "$changed" -eq 1 ]; then
             echo "go.mod or go.sum is not tidy. Please run 'go mod tidy' and commit the changes."
-            git diff go.mod go.sum
+
+            for file in go.mod go.sum; do
+              before_file="$before_dir/$file"
+              if [ -f "$before_file" ] || [ -f "$file" ]; then
+                left=/dev/null
+                right=/dev/null
+
+                if [ -f "$before_file" ]; then
+                  left="$before_file"
+                fi
+
+                if [ -f "$file" ]; then
+                  right="$file"
+                fi
+
+                diff -u "$left" "$right" || true
+              fi
+            done
+
             exit 1
           fi

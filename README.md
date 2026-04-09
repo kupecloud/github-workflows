@@ -27,11 +27,14 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 
 ## Available workflows
 
-* `go-lint.yaml`: `golangci-lint`, `gofmt`, and `actionlint`
+* `action-lint.yaml`: dedicated GitHub Actions workflow linting
+* `go-lint.yaml`: `golangci-lint` and `gofmt`
 * `go-unit-tests.yaml`: `go vet`, `go test`, optional coverage upload, and
   `go mod tidy` validation
 * `go-security.yaml`: `gosec` and `govulncheck`
 * `helm-lint.yaml`: `helm lint` for a chart path you supply
+* `pre-commit.yaml`: reusable `pre-commit run` with optional Go, Node, and
+  Helm setup for repo-specific hooks
 * `semantic-release.yaml`: semantic versioning and GitHub release creation
 
 ## Usage
@@ -40,14 +43,21 @@ Reference a workflow from another repository with `uses`:
 
 ```yaml
 jobs:
-  lint:
+  go-lint:
     uses: kupecloud/github-workflows/.github/workflows/go-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+
+  action-lint:
+    uses: kupecloud/github-workflows/.github/workflows/action-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
 ```
 
 Keep shared workflows generic, and keep repository-specific orchestration in
 the consuming repository.
 
 Prefer a full commit SHA in consuming repositories so workflow refs stay immutable.
+
+Use `pre-commit.yaml` as the baseline hygiene gate where a repository already
+has a `.pre-commit-config.yaml`, then keep stack-specific jobs such as Go
+tests, Go security, or Helm lint as separate jobs where they add signal.
 
 ## This Repo
 
@@ -80,18 +90,24 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Lint
+  go-lint:
+    name: Go Lint
     uses: kupecloud/github-workflows/.github/workflows/go-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+
+  action-lint:
+    name: Action Lint
+    uses: kupecloud/github-workflows/.github/workflows/action-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
 
   unit-tests:
     name: Unit Tests
+    needs:
+      - go-lint
+      - action-lint
     uses: kupecloud/github-workflows/.github/workflows/go-unit-tests.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
 
   gosec:
     name: Go Security
     needs:
-      - lint
       - unit-tests
     uses: kupecloud/github-workflows/.github/workflows/go-security.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
 

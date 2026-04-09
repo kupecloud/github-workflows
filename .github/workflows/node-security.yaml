@@ -1,0 +1,76 @@
+name: Node Security
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to install
+        required: false
+        default: "20"
+        type: string
+      working-directory:
+        description: Directory containing package.json
+        required: false
+        default: "."
+        type: string
+      audit-level:
+        description: Minimum severity that fails the build (low, moderate, high, critical)
+        required: false
+        default: high
+        type: string
+      audit-omit:
+        description: Dependency groups to omit from audit (e.g. dev, optional, peer)
+        required: false
+        default: dev
+        type: string
+
+jobs:
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      # NOTE: we run npm audit BEFORE installing because `npm audit` works
+      # against package-lock.json directly and does not need node_modules.
+      # Skipping `npm ci` here saves ~30s of install time on every CI run.
+      - name: Run npm audit
+        id: audit
+        shell: bash
+        run: |
+          set +e
+          npm audit --audit-level=${{ inputs.audit-level }} --omit=${{ inputs.audit-omit }}
+          EXIT_CODE=$?
+          set -e
+          exit $EXIT_CODE
+
+      - name: npm audit summary
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.audit.outcome }}" = "success" ]; then
+            {
+              echo "### npm audit"
+              echo "No production dependency vulnerabilities at level \`${{ inputs.audit-level }}\` or above."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### npm audit"
+              echo "Production dependency vulnerabilities found at level \`${{ inputs.audit-level }}\` or above."
+              echo ""
+              echo "- Review the job logs for the full advisory list."
+              echo "- Run \`npm audit fix\` locally to apply available patches."
+              echo "- For unfixable advisories, document the residual risk and pin the dependency."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

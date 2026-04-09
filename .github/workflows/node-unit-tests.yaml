@@ -1,0 +1,76 @@
+name: Node Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to install
+        required: false
+        default: "20"
+        type: string
+      working-directory:
+        description: Directory containing package.json
+        required: false
+        default: "."
+        type: string
+      test-script:
+        description: npm script name for the unit test runner
+        required: false
+        default: test
+        type: string
+      upload-coverage:
+        description: Upload coverage/ as an artifact when present
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  unit-tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        id: unit
+        shell: bash
+        run: |
+          set +e
+          npm run ${{ inputs.test-script }}
+          EXIT_CODE=$?
+          set -e
+          exit $EXIT_CODE
+
+      - name: Unit test summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Unit tests"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| npm run ${{ inputs.test-script }} | ${{ steps.unit.outcome }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: inputs.upload-coverage && always() && hashFiles(format('{0}/coverage/**', inputs.working-directory)) != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: coverage-report
+          path: ${{ inputs.working-directory }}/coverage/
+          retention-days: 7

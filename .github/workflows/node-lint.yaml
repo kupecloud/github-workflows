@@ -1,0 +1,108 @@
+name: Node Lint
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to install
+        required: false
+        default: "20"
+        type: string
+      working-directory:
+        description: Directory containing package.json
+        required: false
+        default: "."
+        type: string
+      lint-script:
+        description: npm script name for the linter
+        required: false
+        default: lint
+        type: string
+      tsc-script:
+        description: npm script name for TypeScript type checking
+        required: false
+        default: tsc
+        type: string
+
+jobs:
+  eslint:
+    name: eslint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run eslint
+        id: eslint
+        run: npm run ${{ inputs.lint-script }}
+
+      - name: eslint summary
+        if: always()
+        run: |
+          if [ "${{ steps.eslint.outcome }}" = "success" ]; then
+            {
+              echo "### eslint"
+              echo "Node linting passed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### eslint"
+              echo "Node linting failed."
+              echo ""
+              echo "- Review the job logs for full details."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  tsc:
+    name: tsc
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tsc
+        id: tsc
+        run: npm run ${{ inputs.tsc-script }}
+
+      - name: tsc summary
+        if: always()
+        run: |
+          if [ "${{ steps.tsc.outcome }}" = "success" ]; then
+            {
+              echo "### tsc"
+              echo "TypeScript type checking passed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### tsc"
+              echo "TypeScript type checking failed."
+              echo ""
+              echo "- Review the job logs for full details."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

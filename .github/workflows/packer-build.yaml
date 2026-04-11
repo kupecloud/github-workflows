@@ -1,0 +1,54 @@
+name: Packer Build
+
+on:
+  workflow_call:
+    inputs:
+      semantic_version:
+        description: Semantic version to tag the snapshot
+        required: false
+        type: string
+      packer_dir:
+        description: Path to the directory containing the Packer config
+        required: false
+        type: string
+        default: ./packer
+      packer_version:
+        description: Packer CLI version to install
+        required: false
+        type: string
+        default: 1.14.3
+
+permissions:
+  contents: read
+
+jobs:
+  packer-build:
+    name: Packer Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
+        with:
+          version: ${{ inputs.packer_version }}
+
+      - name: Packer init
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: HCLOUD_TOKEN=${{ secrets.HCLOUD_TOKEN }} packer init ${{ inputs.packer_dir }}
+
+      - name: Packer validate
+        run: HCLOUD_TOKEN=${{ secrets.HCLOUD_TOKEN }} packer validate ${{ inputs.packer_dir }}
+
+      - name: Packer build
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.semantic_version }}" ]; then
+            packer build -var "semantic_version=${{ inputs.semantic_version }}" ${{ inputs.packer_dir }}
+          else
+            packer build ${{ inputs.packer_dir }}
+          fi

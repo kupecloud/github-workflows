@@ -1,0 +1,42 @@
+name: Packer Validate
+
+on:
+  workflow_call:
+    inputs:
+      packer_dir:
+        description: Path to the directory containing the Packer config
+        required: false
+        type: string
+        default: ./packer
+      packer_version:
+        description: Packer CLI version to install
+        required: false
+        type: string
+        default: 1.14.3
+
+permissions:
+  contents: read
+
+jobs:
+  packer-validate:
+    name: Packer Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
+        with:
+          version: ${{ inputs.packer_version }}
+
+      - name: Packer init
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: packer init ${{ inputs.packer_dir }}
+
+      - name: Packer fmt
+        run: packer fmt -check -diff ${{ inputs.packer_dir }}
+
+      - name: Packer validate
+        run: packer validate -var "hcloud_token=validation-dummy" ${{ inputs.packer_dir }}

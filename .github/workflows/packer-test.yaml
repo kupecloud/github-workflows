@@ -1,0 +1,39 @@
+name: Packer Test
+
+on:
+  workflow_call:
+    inputs:
+      semantic_version:
+        description: Semantic version to test against
+        required: false
+        type: string
+      test_script:
+        description: Path to the smoke test script
+        required: false
+        type: string
+        default: ./packer/tests/smoke-test.sh
+
+permissions:
+  contents: read
+
+jobs:
+  packer-test:
+    name: Packer Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Install hcloud CLI
+        run: |
+          curl -sSL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp
+          sudo mv /tmp/hcloud /usr/local/bin/hcloud
+          hcloud version
+
+      - name: Run Packer smoke test
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        run: ${{ inputs.test_script }}

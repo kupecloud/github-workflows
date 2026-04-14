@@ -35,7 +35,9 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 * `helm-lint.yaml`: `helm lint` for a chart path you supply
 * `pre-commit.yaml`: reusable `pre-commit run` with optional Go, Node, and
   Helm setup for repo-specific hooks
-* `semantic-release.yaml`: semantic versioning and GitHub release creation
+* `semantic-release.yaml`: semantic versioning and GitHub release creation,
+  using a repository-local `.releaserc.json` when present and a built-in
+  default otherwise
 
 ## Usage
 
@@ -44,10 +46,10 @@ Reference a workflow from another repository with `uses`:
 ```yaml
 jobs:
   go-lint:
-    uses: kupecloud/github-workflows/.github/workflows/go-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/go-lint.yaml@<full-commit-sha>
 
   action-lint:
-    uses: kupecloud/github-workflows/.github/workflows/action-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/action-lint.yaml@<full-commit-sha>
 ```
 
 Keep shared workflows generic, and keep repository-specific orchestration in
@@ -58,6 +60,14 @@ Prefer a full commit SHA in consuming repositories so workflow refs stay immutab
 Use `pre-commit.yaml` as the baseline hygiene gate where a repository already
 has a `.pre-commit-config.yaml`, then keep stack-specific jobs such as Go
 tests, Go security, or Helm lint as separate jobs where they add signal.
+
+`semantic-release.yaml` does not require every consuming repository to carry
+its own `.releaserc.json`. If the file exists in the consuming repository,
+the workflow uses it as-is. If it does not exist, the workflow writes a
+built-in default config that releases from `main` and uses
+`@semantic-release/commit-analyzer`,
+`@semantic-release/release-notes-generator`, and
+`@semantic-release/github`.
 
 ## This Repo
 
@@ -92,30 +102,30 @@ permissions:
 jobs:
   go-lint:
     name: Go Lint
-    uses: kupecloud/github-workflows/.github/workflows/go-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/go-lint.yaml@<full-commit-sha>
 
   action-lint:
     name: Action Lint
-    uses: kupecloud/github-workflows/.github/workflows/action-lint.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/action-lint.yaml@<full-commit-sha>
 
   unit-tests:
     name: Unit Tests
     needs:
       - go-lint
       - action-lint
-    uses: kupecloud/github-workflows/.github/workflows/go-unit-tests.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/go-unit-tests.yaml@<full-commit-sha>
 
   gosec:
     name: Go Security
     needs:
       - unit-tests
-    uses: kupecloud/github-workflows/.github/workflows/go-security.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/go-security.yaml@<full-commit-sha>
 
   release:
     name: Release
     needs:
       - gosec
-    uses: kupecloud/github-workflows/.github/workflows/semantic-release.yaml@09fcdad22d0195c319ead621bb5320da422ee4ac
+    uses: kupecloud/github-workflows/.github/workflows/semantic-release.yaml@<full-commit-sha>
     permissions:
       contents: write
       issues: write

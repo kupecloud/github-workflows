@@ -1,0 +1,118 @@
+name: Semantic Release Preview
+
+on:
+  workflow_call:
+    outputs:
+      new_release_published:
+        description: Whether a new release would be published
+        value: ${{ jobs.preview.outputs.new_release_published }}
+      new_release_version:
+        description: Next release version
+        value: ${{ jobs.preview.outputs.new_release_version }}
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+  id-token: write
+
+jobs:
+  preview:
+    name: Semantic Release Preview
+    runs-on: ubuntu-latest
+    outputs:
+      new_release_published: ${{ steps.preview.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare default semantic-release config
+        shell: bash
+        run: |
+          if [ -f .releaserc.json ]; then
+            echo "Using repository .releaserc.json"
+            exit 0
+          fi
+
+          cat > .releaserc.json <<'JSON'
+          {
+            "branches": ["main"],
+            "plugins": [
+              [
+                "@semantic-release/commit-analyzer",
+                {
+                  "preset": "conventionalcommits",
+                  "parserOpts": {
+                    "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
+                  },
+                  "releaseRules": [
+                    { "type": "feat", "release": "minor" },
+                    { "type": "fix", "release": "patch" },
+                    { "type": "perf", "release": "patch" },
+                    { "type": "refactor", "release": "patch" },
+                    { "type": "docs", "release": false },
+                    { "type": "style", "release": false },
+                    { "type": "chore", "release": false },
+                    { "type": "test", "release": false },
+                    { "type": "ci", "release": false },
+                    { "breaking": true, "release": "major" }
+                  ]
+                }
+              ],
+              [
+                "@semantic-release/release-notes-generator",
+                {
+                  "preset": "conventionalcommits",
+                  "parserOpts": {
+                    "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
+                  },
+                  "presetConfig": {
+                    "types": [
+                      { "type": "feat", "section": "Features" },
+                      { "type": "fix", "section": "Bug Fixes" },
+                      { "type": "perf", "section": "Performance Improvements" },
+                      { "type": "refactor", "section": "Code Refactoring" },
+                      { "type": "docs", "section": "Documentation", "hidden": true },
+                      { "type": "style", "section": "Styles", "hidden": true },
+                      { "type": "chore", "section": "Miscellaneous", "hidden": true },
+                      { "type": "test", "section": "Tests", "hidden": true },
+                      { "type": "ci", "section": "CI/CD", "hidden": true }
+                    ]
+                  }
+                }
+              ],
+              "@semantic-release/github"
+            ]
+          }
+          JSON
+
+      - name: Semantic Release Preview
+        id: semantic
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
+        with:
+          dry_run: true
+          semantic_version: 24
+          extra_plugins: |
+            conventional-changelog-conventionalcommits
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine release preview result
+        id: preview
+        shell: bash
+        run: |
+          if [ -n "${{ steps.semantic.outputs.new_release_version }}" ]; then
+            echo "new_release_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "new_release_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preview info
+        if: steps.preview.outputs.new_release_published == 'true'
+        run: |
+          echo "Next release would be: v${{ steps.semantic.outputs.new_release_version }}"

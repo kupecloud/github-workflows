@@ -35,6 +35,8 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 * `helm-lint.yaml`: `helm lint` for a chart path you supply
 * `pre-commit.yaml`: reusable `pre-commit run` with optional Go, Node, and
   Helm setup for repo-specific hooks
+* `semantic-release-preview.yaml`: computes whether the current `main` commit
+  would release and what the next version would be, without publishing
 * `semantic-release.yaml`: semantic versioning and GitHub release creation,
   using a repository-local `.releaserc.json` when present and a built-in
   default otherwise
@@ -68,6 +70,11 @@ built-in default config that releases from `main` and uses
 `@semantic-release/commit-analyzer`,
 `@semantic-release/release-notes-generator`, and
 `@semantic-release/github`.
+
+For Terraform repositories that need the computed semantic version during
+`plan` and `apply`, use `semantic-release-preview.yaml` before deploy to
+derive `new_release_published` and `new_release_version`, then run the real
+`semantic-release.yaml` publish step after a successful deploy.
 
 ## This Repo
 

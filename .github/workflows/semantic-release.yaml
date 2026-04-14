@@ -34,9 +34,14 @@ jobs:
       - name: Prepare default semantic-release config
         shell: bash
         run: |
+          if [ -f .releaserc.json ]; then
+            echo "Using repository .releaserc.json"
+            exit 0
+          fi
+
           # Keep this default in sync with
           # .github/semantic-release/default.releaserc.json.
-          cat > "$RUNNER_TEMP/default.releaserc.json" <<'JSON'
+          cat > .releaserc.json <<'JSON'
           {
             "branches": ["main"],
             "plugins": [
@@ -93,7 +98,6 @@ jobs:
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
           semantic_version: 24
-          extends: ${{ runner.temp }}/default.releaserc.json
           extra_plugins: |
             conventional-changelog-conventionalcommits
         env:

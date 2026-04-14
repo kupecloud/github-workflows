@@ -39,8 +39,6 @@ jobs:
             exit 0
           fi
 
-          # Keep this default in sync with
-          # .github/semantic-release/default.releaserc.json.
           cat > .releaserc.json <<'JSON'
           {
             "branches": ["main"],

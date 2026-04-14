@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - ".github/workflows/**"
+      - ".github/semantic-release/**"
+      - "README.md"
   workflow_dispatch:
 
 concurrency:

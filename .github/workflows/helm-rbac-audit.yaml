@@ -1,0 +1,89 @@
+name: Helm RBAC Audit
+
+on:
+  workflow_call:
+    inputs:
+      chart-path:
+        description: Path to the Helm chart directory
+        required: true
+        type: string
+      template-args:
+        description: Arguments passed to helm template (e.g., "-f values.yaml -f values/prod.yaml")
+        required: false
+        default: ""
+        type: string
+      release-name:
+        description: Release name for helm template
+        required: false
+        default: "audit"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rbac-audit:
+    name: rbac secrets audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.6
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Render chart
+        shell: bash
+        run: helm template "${{ inputs.release-name }}" "${{ inputs.chart-path }}" ${{ inputs.template-args }} > /tmp/rendered.yaml
+
+      - name: Audit cluster-wide secrets access
+        id: rbac-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Detect ClusterRoles whose rules grant access to core secrets.
+          # Uses yq -N to suppress null documents and an inline select so
+          # the match is evaluated per-document — avoids the cross-document
+          # variable leak that the `$n` pattern is susceptible to.
+          # shellcheck disable=SC2016
+          offenders=$(yq -N \
+            'select(.kind == "ClusterRole"
+              and (.rules[] | select(.resources != null) | .resources | contains(["secrets"])))
+            | .metadata.name' \
+            /tmp/rendered.yaml | sort -u || true)
+
+          if [ -n "$offenders" ]; then
+            echo "::error::Rendered chart contains ClusterRoles with cluster-wide secrets access:"
+            echo "$offenders"
+            echo ""
+            echo "Cluster-wide secrets read is a blast-radius amplifier. If this"
+            echo "rule is legitimate, document it in security_best_practices_report.md"
+            echo "and explicitly allowlist it in this workflow call."
+            exit 1
+          fi
+          echo "OK: no cluster-wide secrets access in rendered ClusterRoles"
+
+      - name: rbac audit summary
+        if: always()
+        run: |
+          if [ "${{ steps.rbac-audit.outcome }}" = "success" ]; then
+            {
+              echo "### RBAC Secrets Audit"
+              echo "No cluster-wide secrets access found in rendered ClusterRoles."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### RBAC Secrets Audit"
+              echo "**FAILED** — one or more ClusterRoles grant cluster-wide secrets access."
+              echo ""
+              echo "- Review the job logs for the list of offending ClusterRoles."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

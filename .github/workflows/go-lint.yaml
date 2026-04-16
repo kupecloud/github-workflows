@@ -21,7 +21,7 @@ on:
       golangci-version:
         description: golangci-lint version to install
         required: false
-        default: v1.64.8
+        default: v2.1.6
         type: string
 
 jobs:
@@ -41,6 +41,23 @@ jobs:
       - name: Ensure vendor directory
         if: inputs.vendor
         run: go mod vendor
+
+      - name: Apply default golangci config
+        shell: bash
+        run: |
+          if [ ! -f .golangci.yaml ] && [ ! -f .golangci.yml ] && [ ! -f .golangci.json ] && [ ! -f .golangci.toml ]; then
+            VERSION="${{ inputs.golangci-version }}"
+            if [[ "$VERSION" == v2.* ]]; then
+              CONFIG_URL="https://raw.githubusercontent.com/kupecloud/github-workflows/main/golangci-default.yaml"
+            else
+              echo "No default config available for golangci-lint v1 — using built-in defaults"
+              exit 0
+            fi
+            echo "No local golangci config found — downloading shared default"
+            curl -sSfL "$CONFIG_URL" -o .golangci.yaml
+          else
+            echo "Using repo-local golangci config"
+          fi
 
       - name: Install golangci-lint
         shell: bash

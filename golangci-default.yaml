@@ -40,6 +40,12 @@ linters:
       disabled-checks:
         - hugeParam
         - rangeValCopy
+        # Multi-return functions are common in Go; naming every return value
+        # adds noise without meaningfully improving readability in most cases.
+        - unnamedResult
+        # ifElseChain and singleCaseSwitch are stylistic — leave to developers.
+        - ifElseChain
+        - singleCaseSwitch
     revive:
       rules:
         - name: blank-imports

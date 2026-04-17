@@ -28,12 +28,10 @@ linters:
         - shadow
     misspell:
       locale: UK
-      # CSS keywords that aren't spellings to correct
-      extra-words:
-        - typo: "color"
-          correction: "color"
-        - typo: "center"
-          correction: "center"
+      # CSS keywords and other terms that aren't spellings to correct
+      ignore-rules:
+        - color
+        - center
     gocritic:
       enabled-tags:
         - diagnostic

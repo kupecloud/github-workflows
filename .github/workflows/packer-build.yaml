@@ -7,6 +7,10 @@ on:
         description: Semantic version to tag the snapshot
         required: false
         type: string
+      env:
+        description: Environment name to tag the snapshot (dev, prod, ...). Must match the tofu env so data.hcloud_image selectors find the right image.
+        required: false
+        type: string
       packer_dir:
         description: Path to the directory containing the Packer config
         required: false
@@ -47,8 +51,11 @@ jobs:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          args=()
           if [ -n "${{ inputs.semantic_version }}" ]; then
-            packer build -var "semantic_version=${{ inputs.semantic_version }}" ${{ inputs.packer_dir }}
-          else
-            packer build ${{ inputs.packer_dir }}
+            args+=(-var "semantic_version=${{ inputs.semantic_version }}")
           fi
+          if [ -n "${{ inputs.env }}" ]; then
+            args+=(-var "env=${{ inputs.env }}")
+          fi
+          packer build "${args[@]}" ${{ inputs.packer_dir }}

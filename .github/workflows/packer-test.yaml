@@ -32,6 +32,11 @@ jobs:
   packer-test:
     name: Packer Smoke Test
     runs-on: ubuntu-latest
+    # Opt into Node 24 so hashicorp/setup-packer (still on node20 at v3.2.0)
+    # does not emit the deprecation warning on every run. GitHub forces Node 24
+    # for all JS actions from 2026-06-02; this drop-out is removable then.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

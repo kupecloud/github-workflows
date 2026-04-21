@@ -1,0 +1,82 @@
+name: Detect Changes
+
+# Reusable change-detection. Callers list one or more repository paths and
+# get back a single boolean indicating whether any of them changed between
+# the triggering event's base and head commits. Works for pull_request and
+# push events.
+#
+# For independent signals (e.g. "packer changed" AND "docs changed" as
+# separate gates), call this workflow twice with different `paths`. Each
+# call emits its own `changed` output. For a single OR-across-paths gate,
+# list everything in one call.
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: |
+          Newline-separated list of git pathspecs to watch. Each entry can
+          be a directory ("packer/"), a single file ("Dockerfile"), or a
+          glob ("*.tf"). Output is "true" if any tracked file under any
+          listed path changed between the event's base and head commits.
+
+          Example:
+            paths: |
+              packer/
+              docs/
+              README.md
+        required: true
+        type: string
+    outputs:
+      changed:
+        description: '"true" if any listed path changed, else "false".'
+        value: ${{ jobs.detect.outputs.changed }}
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Detect
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          # Full history needed so `git diff BASE HEAD` can resolve both
+          # ends regardless of how shallow the trigger's default fetch is.
+          fetch-depth: 0
+
+      - id: diff
+        env:
+          PATHS: ${{ inputs.paths }}
+          # Covers both trigger shapes: pull_request exposes base/head on
+          # the PR object; push exposes `before` (parent) on the event and
+          # `github.sha` as the new tip.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BASE_SHA:-}" ] || [ -z "${HEAD_SHA:-}" ]; then
+            echo "Unable to resolve BASE_SHA or HEAD_SHA from event context;" >&2
+            echo "event=${GITHUB_EVENT_NAME}, base='${BASE_SHA:-}', head='${HEAD_SHA:-}'" >&2
+            exit 1
+          fi
+
+          # Turn the newline-separated paths input into positional args
+          # for git diff. Blank lines are dropped so trailing newlines in
+          # YAML block scalars don't produce a stray empty pathspec.
+          mapfile -t args < <(printf '%s\n' "$PATHS" | sed '/^[[:space:]]*$/d')
+
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "Input 'paths' is empty; nothing to match." >&2
+            exit 1
+          fi
+
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "${args[@]}" | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi

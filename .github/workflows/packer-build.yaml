@@ -8,7 +8,7 @@ on:
         required: false
         type: string
       env:
-        description: Environment name to tag the snapshot (dev, prod, ...). Must match the tofu env so data.hcloud_image selectors find the right image.
+        description: Environment name to tag the snapshot (dev, prod, ...). Forwarded to Packer as -var env=<value>.
         required: false
         type: string
       packer_dir:
@@ -21,6 +21,14 @@ on:
         required: false
         type: string
         default: 1.14.3
+      provider_env_var:
+        description: Name of the env var the Packer provider expects for its API token (e.g. HCLOUD_TOKEN, DIGITALOCEAN_TOKEN).
+        required: true
+        type: string
+    secrets:
+      provider_token:
+        description: Provider API token exposed as the env var named by provider_env_var.
+        required: true
 
 permissions:
   contents: read
@@ -38,17 +46,27 @@ jobs:
         with:
           version: ${{ inputs.packer_version }}
 
+      - name: Export provider credentials
+        env:
+          PROVIDER_ENV_VAR: ${{ inputs.provider_env_var }}
+          PROVIDER_TOKEN: ${{ secrets.provider_token }}
+        run: |
+          {
+            echo "${PROVIDER_ENV_VAR}<<PROVIDER_TOKEN_EOF"
+            printf '%s\n' "$PROVIDER_TOKEN"
+            echo "PROVIDER_TOKEN_EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Packer init
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: HCLOUD_TOKEN=${{ secrets.HCLOUD_TOKEN }} packer init ${{ inputs.packer_dir }}
+        run: packer init ${{ inputs.packer_dir }}
 
       - name: Packer validate
-        run: HCLOUD_TOKEN=${{ secrets.HCLOUD_TOKEN }} packer validate ${{ inputs.packer_dir }}
+        run: packer validate ${{ inputs.packer_dir }}
 
       - name: Packer build
         env:
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           args=()

@@ -16,6 +16,14 @@ on:
         required: false
         type: string
         default: ./packer/tests/smoke-test.sh
+      provider_env_var:
+        description: Name of the env var the smoke test expects for the provider API token (e.g. HCLOUD_TOKEN, DIGITALOCEAN_TOKEN).
+        required: true
+        type: string
+    secrets:
+      provider_token:
+        description: Provider API token exposed as the env var named by provider_env_var.
+        required: true
 
 permissions:
   contents: read
@@ -35,9 +43,19 @@ jobs:
           sudo mv /tmp/hcloud /usr/local/bin/hcloud
           hcloud version
 
+      - name: Export provider credentials
+        env:
+          PROVIDER_ENV_VAR: ${{ inputs.provider_env_var }}
+          PROVIDER_TOKEN: ${{ secrets.provider_token }}
+        run: |
+          {
+            echo "${PROVIDER_ENV_VAR}<<PROVIDER_TOKEN_EOF"
+            printf '%s\n' "$PROVIDER_TOKEN"
+            echo "PROVIDER_TOKEN_EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Run Packer smoke test
         env:
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SEMANTIC_VERSION: ${{ inputs.semantic_version }}
           ENV: ${{ inputs.env }}

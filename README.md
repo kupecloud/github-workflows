@@ -9,6 +9,11 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 * [Usage](#usage)
 * [This Repo](#this-repo)
 * [Example](#example)
+* [Cleanup GHCR](#cleanup-ghcr)
+  * [What it does](#what-it-does)
+  * [Inputs](#inputs)
+  * [Caller configuration](#caller-configuration)
+  * [Retention choice](#retention-choice)
 
 <!-- Regenerate with "pre-commit run -a markdown-toc" -->
 
@@ -28,6 +33,8 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 ## Available workflows
 
 * `action-lint.yaml`: dedicated GitHub Actions workflow linting
+* `cleanup-ghcr.yaml`: prune untagged GHCR package versions older than a
+  configurable retention window (see [Cleanup GHCR](#cleanup-ghcr))
 * `go-lint.yaml`: `golangci-lint` and `gofmt`
 * `go-unit-tests.yaml`: `go vet`, `go test`, optional coverage upload, and
   `go mod tidy` validation
@@ -145,3 +152,84 @@ jobs:
 If a repository also has custom build or publish steps, keep those as local
 workflows and call them from the local `main.yaml` after the shared lint,
 test, security, and release jobs.
+
+## Cleanup GHCR
+
+Container registry tags are mutable pointers; each push of a reused tag
+(`:dev`, `:main`, a rebuilt `:vX.Y.Z`) leaves the previous manifest behind
+as an untagged version. Those orphans accumulate forever unless something
+deletes them. `cleanup-ghcr.yaml` does the deletion.
+
+### What it does
+
+For a single GHCR package:
+
+* Lists every version via the GitHub API.
+* Keeps every **tagged** version — pruning those is the caller's call,
+  not this workflow's.
+* Keeps every **untagged** version whose `updated_at` is within the
+  retention window.
+* Deletes everything else.
+
+Every run writes a job summary with the counts (kept tagged, kept recent,
+deleted).
+
+### Inputs
+
+| Input | Type | Default | Description |
+| --- | --- | --- | --- |
+| `package_name` | string | repository name | GHCR package name under the owner. Override when it does not match the repo. |
+| `retention_days` | number | `7` | Delete untagged versions older than this many days. |
+| `owner_type` | string | `orgs` | Either `orgs` or `users`. Org-owned packages use `orgs`; user-owned use `users`. |
+| `dry_run` | boolean | `false` | When `true`, log candidates without deleting. |
+
+### Caller configuration
+
+Callers schedule the cleanup themselves and declare `packages: write` at
+the job level so the reusable workflow's `GITHUB_TOKEN` can delete
+versions. Weekly on Mondays at 03:00 UTC is a reasonable default — tune
+per repository if your dev push cadence is higher:
+
+```yaml
+name: Cleanup GHCR
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Keep untagged versions updated within this many days.
+        required: false
+        type: number
+        default: 7
+      dry_run:
+        description: Log candidates without deleting anything.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Cleanup GHCR untagged versions
+    uses: kupecloud/github-workflows/.github/workflows/cleanup-ghcr.yaml@<full-commit-sha>
+    permissions:
+      packages: write
+    with:
+      retention_days: ${{ inputs.retention_days || 7 }}
+      dry_run: ${{ inputs.dry_run || false }}
+```
+
+For repositories that push multiple GHCR packages, duplicate the job and
+pass `package_name:` per call.
+
+### Retention choice
+
+The default (7 days) is aimed at services that push a reused tag many
+times per day during active development. It keeps enough history to
+roll back recent `:dev` or `:main` pushes while still pruning aggressively.
+Pass a larger value for repositories where the reused tag changes only
+during a release window.

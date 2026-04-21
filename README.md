@@ -144,8 +144,6 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      packages: write
-      id-token: write
     secrets: inherit
 ```
 

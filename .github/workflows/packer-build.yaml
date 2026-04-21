@@ -25,6 +25,16 @@ on:
         description: Name of the env var the Packer provider expects for its API token (e.g. HCLOUD_TOKEN, DIGITALOCEAN_TOKEN).
         required: true
         type: string
+      extra_vars:
+        description: Additional Packer variables as newline-delimited KEY=VALUE pairs. Values are forwarded verbatim via -var.
+        required: false
+        type: string
+        default: ""
+      force:
+        description: Pass -force to packer build so existing artifacts are overwritten instead of failing. Safe when the provider's artifact is not live-referenced after creation (e.g. Hetzner snapshots).
+        required: false
+        type: boolean
+        default: false
     secrets:
       provider_token:
         description: Provider API token exposed as the env var named by provider_env_var.
@@ -73,12 +83,21 @@ jobs:
       - name: Packer build
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXTRA_VARS: ${{ inputs.extra_vars }}
+          FORCE: ${{ inputs.force }}
         run: |
           args=()
+          if [ "$FORCE" = "true" ]; then
+            args+=(-force)
+          fi
           if [ -n "${{ inputs.semantic_version }}" ]; then
             args+=(-var "semantic_version=${{ inputs.semantic_version }}")
           fi
           if [ -n "${{ inputs.env }}" ]; then
             args+=(-var "env=${{ inputs.env }}")
           fi
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            args+=(-var "$line")
+          done <<< "$EXTRA_VARS"
           packer build "${args[@]}" ${{ inputs.packer_dir }}

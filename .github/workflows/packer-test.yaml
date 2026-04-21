@@ -36,13 +36,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install hcloud CLI
-        run: |
-          curl -sSL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz -o /tmp/hcloud.tar.gz
-          tar -xzf /tmp/hcloud.tar.gz -C /tmp
-          sudo mv /tmp/hcloud /usr/local/bin/hcloud
-          hcloud version
-
       - name: Export provider credentials
         env:
           PROVIDER_ENV_VAR: ${{ inputs.provider_env_var }}

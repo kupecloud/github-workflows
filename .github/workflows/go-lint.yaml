@@ -106,12 +106,12 @@ jobs:
       - name: Check formatting
         id: gofmt
         run: |
-          gofmt -l . > gofmt-files.txt
+          find . -path ./vendor -prune -o -name '*.go' -exec gofmt -l {} + > gofmt-files.txt
           if [ -s gofmt-files.txt ]; then
             echo "The following files are not formatted correctly:"
             cat gofmt-files.txt
             echo ""
-            echo "Please run 'gofmt -w .' to fix formatting."
+            echo "Please run 'pre-commit run gofmt --all-files' to fix formatting."
             exit 1
           fi
 
@@ -133,6 +133,6 @@ jobs:
                 echo "No files captured."
               fi
               echo "\`\`\`"
-              echo "Please run \`gofmt -w .\` to fix formatting."
+              echo "Please run \`pre-commit run gofmt --all-files\` to fix formatting."
             } >> "$GITHUB_STEP_SUMMARY"
           fi

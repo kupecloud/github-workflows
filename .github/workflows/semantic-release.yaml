@@ -27,7 +27,13 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
-          persist-credentials: false
+          # `persist-credentials: true` puts GITHUB_TOKEN in the git
+          # remote URL so semantic-release plugins (notably
+          # @semantic-release/git) can push the post-release file bumps
+          # back to main. Pushes from GITHUB_TOKEN don't trigger CI,
+          # which is exactly what we want for `chore(release): ... [skip ci]`
+          # commits — they'd otherwise loop into the next release run.
+          persist-credentials: true
 
       - name: Prepare default semantic-release config
         shell: bash
@@ -94,8 +100,15 @@ jobs:
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
           semantic_version: 24
+          # @semantic-release/exec + @semantic-release/git are pre-installed
+          # so per-repo `.releaserc.json` can use them to bump in-repo files
+          # (e.g. chart/Chart.yaml appVersion) and commit the bump back to
+          # the release tag. Repos that don't reference these plugins are
+          # unaffected — the install is harmless.
           extra_plugins: |
             conventional-changelog-conventionalcommits
+            @semantic-release/exec
+            @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

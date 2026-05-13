@@ -23,6 +23,16 @@ on:
         required: false
         default: ""
         type: string
+      install-npm-deps:
+        description: Run npm ci before pre-commit (requires node-version to be set)
+        required: false
+        default: false
+        type: boolean
+      working-directory:
+        description: Directory containing package.json (used when install-npm-deps is true)
+        required: false
+        default: "."
+        type: string
       install-helm:
         description: Whether Helm should be installed for pre-commit hooks
         required: false
@@ -73,6 +83,12 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: npm
+          cache-dependency-path: ${{ inputs.install-npm-deps && format('{0}/package-lock.json', inputs.working-directory) || '' }}
+
+      - name: Install npm dependencies
+        if: inputs.install-npm-deps
+        working-directory: ${{ inputs.working-directory }}
+        run: npm ci
 
       - name: Set up Helm
         if: inputs.install-helm

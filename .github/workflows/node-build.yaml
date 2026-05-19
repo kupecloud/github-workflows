@@ -3,6 +3,14 @@ name: Node Build
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
       node-version:
         description: Node.js version to install
         required: false
@@ -42,7 +50,7 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}

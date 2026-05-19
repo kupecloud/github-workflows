@@ -6,6 +6,14 @@ name: Publish Node Image
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
       version:
         description: Semantic release version without the leading v
         required: true
@@ -44,7 +52,7 @@ permissions:
 jobs:
   publish:
     name: Build, Push & Sign
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

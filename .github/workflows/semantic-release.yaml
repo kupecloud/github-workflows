@@ -2,6 +2,15 @@ name: Semantic Release
 
 on:
   workflow_call:
+    inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
     outputs:
       new_release_published:
         description: Whether a new release was published
@@ -18,7 +27,7 @@ permissions:
 jobs:
   release:
     name: Semantic Release
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     outputs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
       new_release_version: ${{ steps.semantic.outputs.new_release_version }}

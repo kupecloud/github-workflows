@@ -13,6 +13,14 @@ name: Detect Changes
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
       paths:
         description: |
           Newline-separated list of git pathspecs to watch. Each entry can
@@ -38,7 +46,7 @@ permissions:
 jobs:
   detect:
     name: Detect
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     outputs:
       changed: ${{ steps.diff.outputs.changed }}
     steps:

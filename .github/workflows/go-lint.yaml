@@ -3,6 +3,14 @@ name: Go Lint
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
       go-version-file:
         description: Path to the Go version file
         required: false
@@ -27,7 +35,7 @@ on:
 jobs:
   golangci-lint:
     name: golangci-lint
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -92,7 +100,7 @@ jobs:
 
   go-fmt:
     name: gofmt
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

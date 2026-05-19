@@ -13,6 +13,14 @@ name: Cleanup GHCR Untagged
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
       package_name:
         description: GHCR package name under the owner (defaults to the repository name).
         required: false
@@ -40,7 +48,7 @@ permissions:
 jobs:
   cleanup:
     name: Delete untagged versions older than retention window
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Prune untagged GHCR versions
         env:

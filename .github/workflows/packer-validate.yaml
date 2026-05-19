@@ -3,6 +3,14 @@ name: Packer Validate
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
+          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
+          the self-hosted runner scale sets from the kupe/github-runners chart.
+        required: false
+        default: ubuntu-latest
+        type: string
       packer_dir:
         description: Path to the directory containing the Packer config
         required: false
@@ -20,7 +28,7 @@ permissions:
 jobs:
   packer-validate:
     name: Packer Validate
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     # Opt into Node 24 so hashicorp/setup-packer (still on node20 at v3.2.0)
     # does not emit the deprecation warning on every run. GitHub forces Node 24
     # for all JS actions from 2026-06-02; this drop-out is removable then.

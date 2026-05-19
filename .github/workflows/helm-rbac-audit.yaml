@@ -43,9 +43,13 @@ jobs:
           version: v3.18.6
 
       - name: Install yq
+        # Install to a user-writable location so this works on minimal
+        # self-hosted runner images that don't grant passwordless sudo.
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          mkdir -p "$HOME/.local/bin"
+          wget -qO "$HOME/.local/bin/yq" https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64
+          chmod +x "$HOME/.local/bin/yq"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Render chart
         shell: bash

@@ -38,6 +38,10 @@ inputs:
     description: "Tofu action comment-mode (off | redacted | full)."
     required: false
     default: "off"
+  summary-mode:
+    description: "Tofu action summary-mode (off | redacted | full). Controls verbosity of the GITHUB_STEP_SUMMARY block."
+    required: false
+    default: "redacted"
   node-version:
     description: Node.js version installed by actions/setup-node so the tofu action's preflight script can run.
     required: false
@@ -65,3 +69,4 @@ runs:
         backend-config-vars: ${{ inputs.backend-config-vars }}
         test-dir: ${{ inputs.test-dir }}
         comment-mode: ${{ inputs.comment-mode }}
+        summary-mode: ${{ inputs.summary-mode }}

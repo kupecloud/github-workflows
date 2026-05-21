@@ -16,8 +16,6 @@ on:
       runs-on:
         description: >-
           Runner label. Defaults to ubuntu-latest. Override to a self-hosted
-          runner label if you want to run CI on your own scale set.|          Runner label. Defaults to ubuntu-latest. Override to a self-hosted
-          runner label if you want to run CI on your own scale set.|          Runner label. Defaults to ubuntu-latest. Override to a self-hosted
           runner label if you want to run CI on your own scale set.
         required: false
         default: ubuntu-latest

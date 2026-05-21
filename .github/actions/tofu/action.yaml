@@ -9,7 +9,7 @@ description: >-
 
 inputs:
   steps:
-    description: Tofu action `steps` input (e.g. `validate,lint`, `test`, `checkov`, `plan`, `apply`).
+    description: "Tofu action `steps` input (e.g. `validate,lint`, `test`, `checkov`, `plan`, `apply`)."
     required: true
   version:
     description: OpenTofu version.
@@ -31,11 +31,11 @@ inputs:
     required: false
     default: ""
   test-dir:
-    description: Path to the terraform test directory (used by `steps: test`).
+    description: "Path to the terraform test directory (used by `steps: test`)."
     required: false
     default: ""
   comment-mode:
-    description: Tofu action comment-mode (off | redacted | full).
+    description: "Tofu action comment-mode (off | redacted | full)."
     required: false
     default: "off"
   node-version:

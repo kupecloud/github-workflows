@@ -6,8 +6,6 @@ on:
       runs-on:
         description: >-
           Runner label. Defaults to ubuntu-latest. Override to a self-hosted
-          runner label if you want to run CI on your own scale set.|          Runner label. Defaults to ubuntu-latest. Override to a self-hosted
-          runner label if you want to run CI on your own scale set.|          Runner label. Defaults to ubuntu-latest. Override to a self-hosted
           runner label if you want to run CI on your own scale set.
         required: false
         default: ubuntu-latest
@@ -38,6 +36,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # semantic-release-action invokes `npm ci` to install the tool +
+      # plugins. Minimal self-hosted runner images don't ship Node, so
+      # without this step npm fails with "/bin/sh: 1: npm: not found" —
+      # and because the action swallows that error, the preview returns
+      # new_release_published=false silently, blocking the downstream
+      # release job. Mirrors the same setup in semantic-release.yaml.
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v6.0.0
+        with:
+          node-version: "22"
 
       - name: Prepare default semantic-release config
         shell: bash

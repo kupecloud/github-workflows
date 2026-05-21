@@ -6,8 +6,8 @@ on:
       runs-on:
         description: >-
           Runner label. Defaults to ubuntu-latest. Override to a self-hosted
-          runner label if the calling repo runs CI on its own scale set; pair
-          with self-hosted-runner-labels so actionlint accepts the label.
+          runner label if you want to run CI on your own scale set; pair with
+          runner-labels so actionlint accepts the label.
         required: false
         default: ubuntu-latest
         type: string
@@ -21,15 +21,15 @@ on:
         required: false
         default: v1.7.12
         type: string
-      self-hosted-runner-labels:
+      runner-labels:
         description: >-
           Comma- or newline-separated list of self-hosted runner label names
           (e.g. "fast-runner,gpu-runner"). When set, the workflow writes a
           temporary .github/actionlint.yaml registering these labels so
           actionlint doesn't flag `runs-on: <label>` as unknown. Ignored if
-          the consumer repo already commits a .github/actionlint.yaml. Leave
-          empty (default) if the consumer only uses GitHub-hosted runners or
-          ships its own actionlint config.
+          the calling repo already commits a .github/actionlint.yaml. Leave
+          empty (default) if you only use GitHub-hosted runners or ship your
+          own actionlint config.
         required: false
         default: ""
         type: string
@@ -58,16 +58,16 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       # Register self-hosted runner labels with actionlint when the caller
-      # passes them as input. Skipped if the consumer repo already ships its
+      # passes them as input. Skipped if the calling repo already ships its
       # own .github/actionlint.yaml — that takes precedence.
-      - name: Register self-hosted runner labels
-        if: inputs.self-hosted-runner-labels != ''
+      - name: Register runner labels
+        if: inputs.runner-labels != ''
         shell: bash
         env:
-          LABELS: ${{ inputs.self-hosted-runner-labels }}
+          LABELS: ${{ inputs.runner-labels }}
         run: |
           if [ -f .github/actionlint.yaml ] || [ -f .github/actionlint.yml ]; then
-            echo "Consumer repo provides its own .github/actionlint.yaml — leaving untouched"
+            echo "Calling repo provides its own .github/actionlint.yaml — leaving untouched"
             exit 0
           fi
           mkdir -p .github
@@ -79,7 +79,7 @@ jobs:
               [ -n "${label}" ] && echo "    - ${label}"
             done
           } > .github/actionlint.yaml
-          echo "Wrote .github/actionlint.yaml from self-hosted-runner-labels input:"
+          echo "Wrote .github/actionlint.yaml from runner-labels input:"
           cat .github/actionlint.yaml
 
       - name: Run actionlint

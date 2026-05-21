@@ -45,6 +45,29 @@ jobs:
           GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@${{ inputs.actionlint-version }}
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
+      # Inject default config declaring the kupe-* self-hosted runner labels
+      # provisioned by kupe/github-runners, so consumers using those runners
+      # don't each need their own .github/actionlint.yaml. Consumers may
+      # override by committing their own .github/actionlint.yaml (e.g. to add
+      # extra custom labels) — we only write the default when missing.
+      - name: Inject default actionlint config
+        shell: bash
+        run: |
+          if [ -f .github/actionlint.yaml ] || [ -f .github/actionlint.yml ]; then
+            echo "Consumer repo provides its own .github/actionlint.yaml — leaving untouched"
+            exit 0
+          fi
+          mkdir -p .github
+          cat > .github/actionlint.yaml <<'EOF'
+          self-hosted-runner:
+            # kupe-* runners are provisioned by the kupe/github-runners chart.
+            labels:
+              - kupe-small
+              - kupe-medium
+              - kupe-large
+          EOF
+          echo "Wrote default .github/actionlint.yaml with kupe-* runner labels"
+
       - name: Run actionlint
         id: actionlint
         run: actionlint

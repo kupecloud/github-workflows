@@ -1,0 +1,67 @@
+name: Tofu
+description: >-
+  Wraps coresolutionsltd/tofu-github-action with a Node.js setup step. The
+  tofu action ships a Node-based preflight script that fails with `node:
+  command not found` on minimal self-hosted runner images (the standard
+  actions-runner image is bare Ubuntu without Node). Using this composite
+  action centralises the Node prerequisite so consumers don't have to add
+  setup-node before every tofu call.
+
+inputs:
+  steps:
+    description: Tofu action `steps` input (e.g. `validate,lint`, `test`, `checkov`, `plan`, `apply`).
+    required: true
+  version:
+    description: OpenTofu version.
+    required: true
+  env:
+    description: Environment name, forwarded to the tofu action.
+    required: false
+    default: ""
+  tfvar-files:
+    description: Comma- or newline-separated tfvar file paths.
+    required: false
+    default: ""
+  tfvars:
+    description: tfvar key=value pairs (multi-line). May contain secret values resolved by the caller.
+    required: false
+    default: ""
+  backend-config-vars:
+    description: Backend config key=value pairs (multi-line). May contain secret values resolved by the caller.
+    required: false
+    default: ""
+  test-dir:
+    description: Path to the terraform test directory (used by `steps: test`).
+    required: false
+    default: ""
+  comment-mode:
+    description: Tofu action comment-mode (off | redacted | full).
+    required: false
+    default: "off"
+  node-version:
+    description: Node.js version installed by actions/setup-node so the tofu action's preflight script can run.
+    required: false
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    # setup-node is idempotent: a no-op on runners that already have the
+    # right Node, an install on minimal images. Mirrors the conditional
+    # gcc install in go-unit-tests.yaml.
+    - name: Set up Node.js (required by tofu-github-action preflight)
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v6.0.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Run tofu action
+      uses: coresolutionsltd/tofu-github-action@e6ba9a54d84561200dcfd32cc045776e23b128e8
+      with:
+        steps: ${{ inputs.steps }}
+        version: ${{ inputs.version }}
+        env: ${{ inputs.env }}
+        tfvar-files: ${{ inputs.tfvar-files }}
+        tfvars: ${{ inputs.tfvars }}
+        backend-config-vars: ${{ inputs.backend-config-vars }}
+        test-dir: ${{ inputs.test-dir }}
+        comment-mode: ${{ inputs.comment-mode }}

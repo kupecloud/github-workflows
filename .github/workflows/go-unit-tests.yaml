@@ -56,6 +56,23 @@ jobs:
           go-version-file: ${{ inputs.go-version-file }}
           cache: true
 
+      # gcc is required for `go test -race` (the default test-command
+      # uses -race, and the race detector needs cgo). The standard
+      # actions-runner image is minimal Ubuntu without a C toolchain, so
+      # the install happens here in the shared workflow rather than
+      # asking every consumer to override test-command. The command -v
+      # guard keeps this a no-op on runners that already have gcc
+      # (cloud-hosted ubuntu-latest, custom images), and
+      # --no-install-recommends keeps the footprint tight (~30 MB vs the
+      # ~200 MB full build-essential meta-package).
+      - name: Install gcc (required by -race detector)
+        shell: bash
+        run: |
+          if ! command -v gcc >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends gcc libc6-dev
+          fi
+
       - name: Run go vet
         id: govet
         run: ${{ inputs.vet-command }}

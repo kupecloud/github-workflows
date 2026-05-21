@@ -44,6 +44,18 @@ jobs:
           # commits — they'd otherwise loop into the next release run.
           persist-credentials: true
 
+      # semantic-release is a Node tool — the cycjimmy action below runs
+      # `npm ci` to install it and its plugins. Cloud-hosted runners
+      # (ubuntu-latest) ship Node pre-installed, but the minimal
+      # actions-runner image used by self-hosted scale sets does not, so
+      # the action would otherwise fail with `/bin/sh: 1: npm: not found`
+      # and silently skip the release. setup-node makes this work
+      # uniformly across both runner types.
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v6.0.0
+        with:
+          node-version: "22"
+
       - name: Prepare default semantic-release config
         shell: bash
         run: |

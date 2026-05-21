@@ -5,9 +5,9 @@ on:
     inputs:
       runs-on:
         description: >-
-          Runner label. Default ubuntu-latest keeps the workflow public/external-safe.
-          Internal callers can pass kupe-small | kupe-medium | kupe-large to target
-          the self-hosted runner scale sets from the kupe/github-runners chart.
+          Runner label. Defaults to ubuntu-latest. Override to a self-hosted
+          runner label if the calling repo runs CI on its own scale set; pair
+          with self-hosted-runner-labels so actionlint accepts the label.
         required: false
         default: ubuntu-latest
         type: string
@@ -20,6 +20,18 @@ on:
         description: actionlint version to install
         required: false
         default: v1.7.12
+        type: string
+      self-hosted-runner-labels:
+        description: >-
+          Comma- or newline-separated list of self-hosted runner label names
+          (e.g. "fast-runner,gpu-runner"). When set, the workflow writes a
+          temporary .github/actionlint.yaml registering these labels so
+          actionlint doesn't flag `runs-on: <label>` as unknown. Ignored if
+          the consumer repo already commits a .github/actionlint.yaml. Leave
+          empty (default) if the consumer only uses GitHub-hosted runners or
+          ships its own actionlint config.
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -45,28 +57,30 @@ jobs:
           GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@${{ inputs.actionlint-version }}
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-      # Inject default config declaring the kupe-* self-hosted runner labels
-      # provisioned by kupe/github-runners, so consumers using those runners
-      # don't each need their own .github/actionlint.yaml. Consumers may
-      # override by committing their own .github/actionlint.yaml (e.g. to add
-      # extra custom labels) — we only write the default when missing.
-      - name: Inject default actionlint config
+      # Register self-hosted runner labels with actionlint when the caller
+      # passes them as input. Skipped if the consumer repo already ships its
+      # own .github/actionlint.yaml — that takes precedence.
+      - name: Register self-hosted runner labels
+        if: inputs.self-hosted-runner-labels != ''
         shell: bash
+        env:
+          LABELS: ${{ inputs.self-hosted-runner-labels }}
         run: |
           if [ -f .github/actionlint.yaml ] || [ -f .github/actionlint.yml ]; then
             echo "Consumer repo provides its own .github/actionlint.yaml — leaving untouched"
             exit 0
           fi
           mkdir -p .github
-          cat > .github/actionlint.yaml <<'EOF'
-          self-hosted-runner:
-            # kupe-* runners are provisioned by the kupe/github-runners chart.
-            labels:
-              - kupe-small
-              - kupe-medium
-              - kupe-large
-          EOF
-          echo "Wrote default .github/actionlint.yaml with kupe-* runner labels"
+          {
+            echo "self-hosted-runner:"
+            echo "  labels:"
+            echo "${LABELS}" | tr ',' '\n' | while IFS= read -r label; do
+              label="$(echo "${label}" | tr -d '[:space:]')"
+              [ -n "${label}" ] && echo "    - ${label}"
+            done
+          } > .github/actionlint.yaml
+          echo "Wrote .github/actionlint.yaml from self-hosted-runner-labels input:"
+          cat .github/actionlint.yaml
 
       - name: Run actionlint
         id: actionlint

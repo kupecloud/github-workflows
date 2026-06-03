@@ -42,6 +42,11 @@ on:
         required: false
         type: boolean
         default: false
+      only:
+        description: Forwarded to packer as -only=<value> to restrict the build to a subset of sources (e.g. "hcloud.microos-x86"). Leave empty to build every source defined in the packer config.
+        required: false
+        type: string
+        default: ""
     secrets:
       provider_token:
         description: Provider API token exposed as the env var named by provider_env_var.
@@ -92,10 +97,14 @@ jobs:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXTRA_VARS: ${{ inputs.extra_vars }}
           FORCE: ${{ inputs.force }}
+          ONLY: ${{ inputs.only }}
         run: |
           args=()
           if [ "$FORCE" = "true" ]; then
             args+=(-force)
+          fi
+          if [ -n "$ONLY" ]; then
+            args+=("-only=$ONLY")
           fi
           if [ -n "${{ inputs.semantic_version }}" ]; then
             args+=(-var "semantic_version=${{ inputs.semantic_version }}")

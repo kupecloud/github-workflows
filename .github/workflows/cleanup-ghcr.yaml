@@ -75,9 +75,47 @@ jobs:
 
           kept_tagged=0
           kept_recent=0
+          kept_referenced=0
           deleted=0
           would_delete=0
 
+          # ---- Pass 1: collect digests referenced by any TAGGED manifest ----
+          # A multi-arch image tags ONLY its index; the per-architecture child
+          # manifests and the buildkit attestation manifests are UNTAGGED yet are
+          # referenced by that tagged index. Treating them as deletable orphans
+          # (tag_count == 0) and pruning them silently breaks the tagged image —
+          # `docker pull <tag>` then fails with "manifest <child> not found". So
+          # first build the set of child digests referenced by every tagged
+          # version; those are never deleted, regardless of age.
+          reg_bearer=$(printf '%s' "${GH_TOKEN}" | base64 | tr -d '\n')
+          registry_path=$(printf '%s/%s' "${OWNER}" "${package}" | tr '[:upper:]' '[:lower:]')
+          declare -A referenced=()
+
+          page=1
+          while :; do
+            response=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/${OWNER_TYPE}/${OWNER}/packages/container/${package_enc}/versions?per_page=100&page=${page}")
+            [ "$(echo "$response" | jq 'length')" -eq 0 ] && break
+
+            while IFS=$'\t' read -r digest tag_count; do
+              [ "$tag_count" -gt 0 ] || continue
+              children=$(curl -fsSL \
+                -H "Authorization: Bearer ${reg_bearer}" \
+                -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
+                "https://ghcr.io/v2/${registry_path}/manifests/${digest}" 2>/dev/null \
+                | jq -r 'if .manifests then .manifests[].digest else empty end' 2>/dev/null || true)
+              for child in $children; do
+                referenced["$child"]=1
+              done
+            done < <(echo "$response" | jq -r '.[] | [.name, (.metadata.container.tags | length)] | @tsv')
+
+            page=$((page + 1))
+          done
+          echo "Referenced child manifests (multi-arch + attestations, always kept): ${#referenced[@]}"
+          echo
+
+          # ---- Pass 2: delete untagged versions that are old AND unreferenced ----
           page=1
           while :; do
             response=$(gh api \
@@ -89,9 +127,16 @@ jobs:
               break
             fi
 
-            while IFS=$'\t' read -r id updated_at tag_count; do
+            while IFS=$'\t' read -r id digest updated_at tag_count; do
               if [ "$tag_count" -gt 0 ]; then
                 kept_tagged=$((kept_tagged + 1))
+                continue
+              fi
+
+              # Never delete a manifest referenced by a tagged index (multi-arch
+              # child or attestation) — that is exactly what broke tagged pulls.
+              if [ -n "${referenced[$digest]:-}" ]; then
+                kept_referenced=$((kept_referenced + 1))
                 continue
               fi
 
@@ -102,23 +147,24 @@ jobs:
               fi
 
               if [ "$DRY_RUN" = "true" ]; then
-                echo "DRY RUN: would delete version ${id} (updated ${updated_at})"
+                echo "DRY RUN: would delete version ${id} (${digest}, updated ${updated_at})"
                 would_delete=$((would_delete + 1))
               else
-                echo "Deleting version ${id} (updated ${updated_at})"
+                echo "Deleting version ${id} (${digest}, updated ${updated_at})"
                 gh api --method DELETE \
                   "/${OWNER_TYPE}/${OWNER}/packages/container/${package_enc}/versions/${id}"
                 deleted=$((deleted + 1))
               fi
-            done < <(echo "$response" | jq -r '.[] | [.id, .updated_at, (.metadata.container.tags | length)] | @tsv')
+            done < <(echo "$response" | jq -r '.[] | [.id, .name, .updated_at, (.metadata.container.tags | length)] | @tsv')
 
             page=$((page + 1))
           done
 
           echo
           echo "Summary:"
-          echo "  kept (tagged):  ${kept_tagged}"
-          echo "  kept (recent):  ${kept_recent}"
+          echo "  kept (tagged):     ${kept_tagged}"
+          echo "  kept (referenced): ${kept_referenced}"
+          echo "  kept (recent):     ${kept_recent}"
           if [ "$DRY_RUN" = "true" ]; then
             echo "  would delete:   ${would_delete}"
           else
@@ -131,6 +177,7 @@ jobs:
             echo "| metric | count |"
             echo "| --- | ---: |"
             echo "| kept (tagged) | ${kept_tagged} |"
+            echo "| kept (referenced by tagged index) | ${kept_referenced} |"
             echo "| kept (recent, < ${RETENTION_DAYS}d) | ${kept_recent} |"
             if [ "$DRY_RUN" = "true" ]; then
               echo "| would delete | ${would_delete} |"

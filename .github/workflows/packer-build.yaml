@@ -78,10 +78,13 @@ jobs:
           PROVIDER_ENV_VAR: ${{ inputs.provider_env_var }}
           PROVIDER_TOKEN: ${{ secrets.provider_token }}
         run: |
+          # Randomized heredoc delimiter per GitHub's own guidance, so a token
+          # value can never smuggle a matching terminator line into GITHUB_ENV.
+          DELIM="PROVIDER_TOKEN_EOF_$(openssl rand -hex 16)"
           {
-            echo "${PROVIDER_ENV_VAR}<<PROVIDER_TOKEN_EOF"
+            echo "${PROVIDER_ENV_VAR}<<${DELIM}"
             printf '%s\n' "$PROVIDER_TOKEN"
-            echo "PROVIDER_TOKEN_EOF"
+            echo "${DELIM}"
           } >> "$GITHUB_ENV"
 
       - name: Packer init
@@ -98,6 +101,8 @@ jobs:
           EXTRA_VARS: ${{ inputs.extra_vars }}
           FORCE: ${{ inputs.force }}
           ONLY: ${{ inputs.only }}
+          SEMVER: ${{ inputs.semantic_version }}
+          ENV_NAME: ${{ inputs.env }}
         run: |
           args=()
           if [ "$FORCE" = "true" ]; then
@@ -106,11 +111,11 @@ jobs:
           if [ -n "$ONLY" ]; then
             args+=("-only=$ONLY")
           fi
-          if [ -n "${{ inputs.semantic_version }}" ]; then
-            args+=(-var "semantic_version=${{ inputs.semantic_version }}")
+          if [ -n "$SEMVER" ]; then
+            args+=(-var "semantic_version=$SEMVER")
           fi
-          if [ -n "${{ inputs.env }}" ]; then
-            args+=(-var "env=${{ inputs.env }}")
+          if [ -n "$ENV_NAME" ]; then
+            args+=(-var "env=$ENV_NAME")
           fi
           while IFS= read -r line; do
             [ -z "$line" ] && continue

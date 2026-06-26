@@ -20,6 +20,9 @@ on:
         default: ""
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   helm-lint:
     name: helm lint
@@ -36,7 +39,9 @@ jobs:
       - name: Run helm lint
         id: helm-lint
         shell: bash
-        run: helm lint "${{ inputs.chart-path }}" ${{ inputs.lint-args }}
+        env:
+          CHART_PATH: ${{ inputs.chart-path }}
+        run: helm lint "$CHART_PATH" ${{ inputs.lint-args }}
 
       - name: helm lint summary
         if: always()

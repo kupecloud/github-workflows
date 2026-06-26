@@ -52,7 +52,10 @@ jobs:
 
       - name: Render chart
         shell: bash
-        run: helm template "${{ inputs.release-name }}" "${{ inputs.chart-path }}" ${{ inputs.template-args }} > /tmp/rendered.yaml
+        env:
+          RELEASE_NAME: ${{ inputs.release-name }}
+          CHART_PATH: ${{ inputs.chart-path }}
+        run: helm template "$RELEASE_NAME" "$CHART_PATH" ${{ inputs.template-args }} > /tmp/rendered.yaml
 
       - name: Audit cluster-wide secrets access
         id: rbac-audit

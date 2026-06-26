@@ -31,6 +31,9 @@ on:
         default: dev
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   npm-audit:
     name: npm audit

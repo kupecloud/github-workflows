@@ -41,6 +41,9 @@ on:
         default: true
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
     name: Run unit tests

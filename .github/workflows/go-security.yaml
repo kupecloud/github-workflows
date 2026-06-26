@@ -36,6 +36,9 @@ on:
         default: ./...
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   gosec:
     name: Go Security Scanner

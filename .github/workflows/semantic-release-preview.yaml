@@ -18,10 +18,10 @@ on:
         description: Next release version
         value: ${{ jobs.preview.outputs.new_release_version }}
 
+# Dry-run only: computes the next version and publishes nothing
+# (dry_run: true, persist-credentials: false). Read-only is sufficient.
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
   preview:

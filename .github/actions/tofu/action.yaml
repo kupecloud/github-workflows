@@ -59,7 +59,9 @@ runs:
         node-version: ${{ inputs.node-version }}
 
     - name: Run tofu action
-      uses: coresolutionsltd/tofu-github-action@e6ba9a54d84561200dcfd32cc045776e23b128e8
+      # Third-party action — receives caller-resolved secret tfvars and backend
+      # creds. Pin bumps must go through credential-touching-dependency review.
+      uses: coresolutionsltd/tofu-github-action@e6ba9a54d84561200dcfd32cc045776e23b128e8 # v1.10.0
       with:
         steps: ${{ inputs.steps }}
         version: ${{ inputs.version }}

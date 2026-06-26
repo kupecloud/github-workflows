@@ -28,10 +28,11 @@ jobs:
     needs:
       - validate
     uses: ./.github/workflows/semantic-release.yaml
+    # semantic-release.yaml only creates GitHub releases and pushes file
+    # bumps via @semantic-release/git — it publishes no images and does no
+    # OIDC, so packages:write / id-token:write are not needed here.
     permissions:
       contents: write
       issues: write
       pull-requests: write
-      packages: write
-      id-token: write
     secrets: inherit

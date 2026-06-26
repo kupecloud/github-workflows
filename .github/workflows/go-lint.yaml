@@ -31,6 +31,9 @@ on:
         default: v2.1.6
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   golangci-lint:
     name: golangci-lint
@@ -54,13 +57,18 @@ jobs:
         run: |
           if [ ! -f .golangci.yaml ] && [ ! -f .golangci.yml ] && [ ! -f .golangci.json ] && [ ! -f .golangci.toml ]; then
             VERSION="${{ inputs.golangci-version }}"
-            if [[ "$VERSION" == v2.* ]]; then
-              CONFIG_URL="https://raw.githubusercontent.com/kupecloud/github-workflows/main/golangci-default.yaml"
-            else
+            if [[ "$VERSION" != v2.* ]]; then
               echo "No default config available for golangci-lint v1 — using built-in defaults"
               exit 0
             fi
-            echo "No local golangci config found — downloading shared default"
+            # Pin the shared default config to the exact commit of *this*
+            # reusable workflow (GITHUB_WORKFLOW_SHA) rather than the mutable
+            # `main` branch, so the lint config is immutable and matches the
+            # SHA the consumer pinned its `uses:` to. Falls back to main only
+            # if the variable is unset (e.g. older runner).
+            CONFIG_REF="${GITHUB_WORKFLOW_SHA:-main}"
+            CONFIG_URL="https://raw.githubusercontent.com/kupecloud/github-workflows/${CONFIG_REF}/golangci-default.yaml"
+            echo "No local golangci config found — downloading shared default from ${CONFIG_REF}"
             curl -sSfL "$CONFIG_URL" -o .golangci.yaml
           else
             echo "Using repo-local golangci config"

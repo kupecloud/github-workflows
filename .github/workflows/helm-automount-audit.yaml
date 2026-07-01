@@ -60,11 +60,26 @@ jobs:
       - name: Audit pod token automount
         shell: bash
         run: |
+          # Covers workload controllers (Deployment/StatefulSet/DaemonSet),
+          # ARC runner scale sets (AutoscalingRunnerSet — its pod spec lives at
+          # .spec.template.spec, same as a Deployment), and bare Pods (whose
+          # automount field is at .spec, not .spec.template.spec). Without ARC
+          # + Pod the audit emits a false all-clear for exactly the runner pods
+          # that most need a token-automount check.
+          # $isPod below is a yq variable (not shell) — do not let the shell
+          # expand it.
           # shellcheck disable=SC2016
           automounts=$(yq -N \
-            'select((.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet")
-              and .spec.template.spec.automountServiceAccountToken != false)
-            | .metadata.name' \
+            'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet"
+                or .kind == "AutoscalingRunnerSet" or .kind == "Pod")
+            | (.kind == "Pod") as $isPod
+            | {"name": .metadata.name,
+               "automount": (
+                  (select($isPod) | .spec.automountServiceAccountToken),
+                  (select($isPod == false) | .spec.template.spec.automountServiceAccountToken)
+               )}
+            | select(.automount != false)
+            | .name' \
             /tmp/rendered.yaml | sort -u || true)
           {
             echo "### Pod Token Automount Audit"

@@ -62,11 +62,16 @@ jobs:
               exit 0
             fi
             # Pin the shared default config to the exact commit of *this*
-            # reusable workflow (GITHUB_WORKFLOW_SHA) rather than the mutable
-            # `main` branch, so the lint config is immutable and matches the
-            # SHA the consumer pinned its `uses:` to. Falls back to main only
+            # reusable workflow rather than the mutable `main` branch, so the
+            # lint config is immutable and matches the SHA the consumer pinned
+            # its `uses:` to. GITHUB_JOB_WORKFLOW_SHA (github.job_workflow_sha)
+            # is the commit SHA of the reusable workflow file that defines this
+            # job; GITHUB_WORKFLOW_SHA must NOT be used here — in a reusable
+            # workflow the github context is the *caller's*, so it holds the
+            # consumer repo's commit, which does not exist under
+            # kupecloud/github-workflows and would 404. Falls back to main only
             # if the variable is unset (e.g. older runner).
-            CONFIG_REF="${GITHUB_WORKFLOW_SHA:-main}"
+            CONFIG_REF="${GITHUB_JOB_WORKFLOW_SHA:-main}"
             CONFIG_URL="https://raw.githubusercontent.com/kupecloud/github-workflows/${CONFIG_REF}/golangci-default.yaml"
             echo "No local golangci config found — downloading shared default from ${CONFIG_REF}"
             curl -sSfL "$CONFIG_URL" -o .golangci.yaml

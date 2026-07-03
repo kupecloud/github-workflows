@@ -54,6 +54,12 @@ jobs:
 
       - name: Apply default golangci config
         shell: bash
+        env:
+          # job_workflow_sha is only a context property, NOT a default env var
+          # (GITHUB_JOB_WORKFLOW_SHA does not exist), so it must be injected here
+          # for the script to pin the shared config to this reusable workflow's
+          # commit instead of always falling back to mutable `main`.
+          JOB_WORKFLOW_SHA: ${{ github.job_workflow_sha }}
         run: |
           if [ ! -f .golangci.yaml ] && [ ! -f .golangci.yml ] && [ ! -f .golangci.json ] && [ ! -f .golangci.toml ]; then
             VERSION="${{ inputs.golangci-version }}"
@@ -64,14 +70,14 @@ jobs:
             # Pin the shared default config to the exact commit of *this*
             # reusable workflow rather than the mutable `main` branch, so the
             # lint config is immutable and matches the SHA the consumer pinned
-            # its `uses:` to. GITHUB_JOB_WORKFLOW_SHA (github.job_workflow_sha)
-            # is the commit SHA of the reusable workflow file that defines this
-            # job; GITHUB_WORKFLOW_SHA must NOT be used here — in a reusable
-            # workflow the github context is the *caller's*, so it holds the
-            # consumer repo's commit, which does not exist under
-            # kupecloud/github-workflows and would 404. Falls back to main only
-            # if the variable is unset (e.g. older runner).
-            CONFIG_REF="${GITHUB_JOB_WORKFLOW_SHA:-main}"
+            # its `uses:` to. JOB_WORKFLOW_SHA is injected from
+            # github.job_workflow_sha (see the step `env:` above) — the commit
+            # SHA of the reusable workflow file that defines this job.
+            # github.workflow_sha must NOT be used here — in a reusable workflow
+            # the github context is the *caller's*, so it holds the consumer
+            # repo's commit, which does not exist under kupecloud/github-workflows
+            # and would 404. Falls back to main only if unset.
+            CONFIG_REF="${JOB_WORKFLOW_SHA:-main}"
             CONFIG_URL="https://raw.githubusercontent.com/kupecloud/github-workflows/${CONFIG_REF}/golangci-default.yaml"
             echo "No local golangci config found — downloading shared default from ${CONFIG_REF}"
             curl -sSfL "$CONFIG_URL" -o .golangci.yaml

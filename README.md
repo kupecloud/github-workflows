@@ -160,17 +160,26 @@ deletes them. `cleanup-ghcr.yaml` does the deletion.
 
 ### What it does
 
-For a single GHCR package:
+For a single GHCR package, in two passes:
 
-* Lists every version via the GitHub API.
-* Keeps every **tagged** version — pruning those is the caller's call,
-  not this workflow's.
-* Keeps every **untagged** version whose `updated_at` is within the
-  retention window.
-* Deletes everything else.
+* **Pass 1 — build the protection set.** For every **tagged** manifest,
+  fetch it and collect the child digests it references (a multi-arch image
+  tags only its index; the per-architecture children and attestation
+  manifests are untagged). These referenced children are always kept —
+  deleting them would break the tagged pull.
+* **Pass 2 — delete.** Keeps every **tagged** version (pruning those is the
+  caller's call, not this workflow's), keeps every **untagged** version whose
+  `updated_at` is within the retention window OR that is in the pass-1
+  protection set, and deletes everything else.
+
+**Fails closed.** If any tagged-manifest fetch or parse in pass 1 errors, the
+protection set may be incomplete, so the run skips all deletions (degrades to
+report-only) **and exits non-zero** — a persistently broken protection pass
+surfaces as a job failure rather than silently pruning children that a tagged
+index still references.
 
 Every run writes a job summary with the counts (kept tagged, kept recent,
-deleted).
+deleted), and notes when it failed closed.
 
 ### Inputs
 

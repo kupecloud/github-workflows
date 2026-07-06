@@ -78,6 +78,7 @@ jobs:
           kept_referenced=0
           deleted=0
           would_delete=0
+          fetch_failed=0
 
           # ---- Pass 1: collect digests referenced by any TAGGED manifest ----
           # A multi-arch image tags ONLY its index; the per-architecture child
@@ -100,11 +101,29 @@ jobs:
 
             while IFS=$'\t' read -r digest tag_count; do
               [ "$tag_count" -gt 0 ] || continue
-              children=$(curl -fsSL \
+              # Fail CLOSED on fetch errors: swallowing a transient failure
+              # here would drop this tagged index's children from the
+              # protection set, and pass 2 would delete them — exactly the
+              # broken-tagged-pull incident described above. Any failure
+              # flags the run so the delete phase is skipped (report-only).
+              curl_status=0
+              manifest=$(curl -fsSL \
                 -H "Authorization: Bearer ${reg_bearer}" \
                 -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
-                "https://ghcr.io/v2/${registry_path}/manifests/${digest}" 2>/dev/null \
-                | jq -r 'if .manifests then .manifests[].digest else empty end' 2>/dev/null || true)
+                "https://ghcr.io/v2/${registry_path}/manifests/${digest}") || curl_status=$?
+              if [ "$curl_status" -ne 0 ]; then
+                echo "::error::Manifest fetch failed for tagged digest ${digest} (curl exit ${curl_status})"
+                fetch_failed=1
+                continue
+              fi
+              # A single-arch manifest legitimately has no .manifests list —
+              # that yields empty output with exit 0. Only a parse failure
+              # (non-JSON response) is an error.
+              if ! children=$(jq -r 'if .manifests then .manifests[].digest else empty end' <<< "$manifest"); then
+                echo "::error::Manifest parse failed for tagged digest ${digest}"
+                fetch_failed=1
+                continue
+              fi
               for child in $children; do
                 referenced["$child"]=1
               done
@@ -114,6 +133,11 @@ jobs:
           done
           echo "Referenced child manifests (multi-arch + attestations, always kept): ${#referenced[@]}"
           echo
+
+          if [ "$fetch_failed" -ne 0 ]; then
+            echo "::error::One or more tagged-manifest fetches failed; the referenced set may be incomplete. Failing closed: skipping all deletions this run (report-only)."
+            DRY_RUN="true"
+          fi
 
           # ---- Pass 2: delete untagged versions that are old AND unreferenced ----
           page=1
@@ -184,4 +208,15 @@ jobs:
             else
               echo "| deleted | ${deleted} |"
             fi
+            if [ "$fetch_failed" -ne 0 ]; then
+              echo ""
+              echo "> **Failed closed:** tagged-manifest fetch errors — deletions were skipped this run."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          # Surface the fail-closed condition as a job failure so a
+          # persistently broken protection pass cannot go unnoticed while
+          # every run silently degrades to report-only.
+          if [ "$fetch_failed" -ne 0 ]; then
+            exit 1
+          fi

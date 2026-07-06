@@ -67,10 +67,15 @@ jobs:
           # Uses yq -N to suppress null documents and an inline select so
           # the match is evaluated per-document — avoids the cross-document
           # variable leak that the `$n` pattern is susceptible to.
+          # Match resources exactly: `contains(["secrets"])` substring-matches
+          # (false positives on externalsecrets/secretstores/...) and never
+          # matches the wildcard, so `resources: ["*"]` bypassed the gate.
+          # yq's `==` glob-matches strings, so the wildcard needs a regex.
           # shellcheck disable=SC2016
           offenders=$(yq -N \
-            'select(.kind == "ClusterRole"
-              and (.rules[] | select(.resources != null) | .resources | contains(["secrets"])))
+            'select(.kind == "ClusterRole")
+            | select([.rules[]? | select(.resources != null) | .resources[]
+                | select(. == "secrets" or test("^\*$"))] | length > 0)
             | .metadata.name' \
             /tmp/rendered.yaml | sort -u || true)
 

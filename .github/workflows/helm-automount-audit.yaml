@@ -60,14 +60,13 @@ jobs:
       - name: Audit pod token automount
         shell: bash
         run: |
-          # Covers workload controllers (Deployment/StatefulSet/DaemonSet),
+          # Covers workload controllers (Deployment/StatefulSet/DaemonSet/Job),
           # ARC runner scale sets (AutoscalingRunnerSet — its pod spec lives at
-          # .spec.template.spec, same as a Deployment), and bare Pods (whose
-          # automount field is at .spec, not .spec.template.spec). Without ARC
-          # + Pod the audit emits a false all-clear for exactly the runner pods
-          # that most need a token-automount check.
-          # $isPod below is a yq variable (not shell) — do not let the shell
-          # expand it.
+          # .spec.template.spec, same as a Deployment), bare Pods (whose
+          # automount field is at .spec, not .spec.template.spec), and CronJobs
+          # (pod spec nested at .spec.jobTemplate.spec.template.spec). Omitting
+          # Job/CronJob emits a false all-clear the day a chart adds a migration
+          # Job or cleanup CronJob with default token automount.
           # No `|| true`: a yq error (parse failure, expression regression after
           # a yq bump, missing /tmp/rendered.yaml) must fail the step rather
           # than swallow into an empty result that prints a false all-clear.
@@ -75,12 +74,13 @@ jobs:
           # shellcheck disable=SC2016
           automounts=$(yq -N \
             'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet"
-                or .kind == "AutoscalingRunnerSet" or .kind == "Pod")
-            | (.kind == "Pod") as $isPod
+                or .kind == "AutoscalingRunnerSet" or .kind == "Job"
+                or .kind == "CronJob" or .kind == "Pod")
             | {"name": .metadata.name,
                "automount": (
-                  (select($isPod) | .spec.automountServiceAccountToken),
-                  (select($isPod == false) | .spec.template.spec.automountServiceAccountToken)
+                  (select(.kind == "Pod") | .spec.automountServiceAccountToken),
+                  (select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec.automountServiceAccountToken),
+                  (select(.kind != "Pod" and .kind != "CronJob") | .spec.template.spec.automountServiceAccountToken)
                )}
             | select(.automount != false)
             | .name' \

@@ -114,8 +114,16 @@ jobs:
         with:
           dry_run: true
           semantic_version: 24
+          # Mirror semantic-release.yaml exactly. semantic-release loads every
+          # plugin named in `.releaserc.json` at startup — including in
+          # dry-run — so a repo whose config references @semantic-release/exec
+          # or @semantic-release/git (crds, kupe-api, observability, vcluster,
+          # kupe-control-operator, ...) fails the preview with "Cannot find
+          # module" unless those plugins are installed here too.
           extra_plugins: |
             conventional-changelog-conventionalcommits
+            @semantic-release/exec
+            @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -72,6 +72,21 @@ jobs:
             exit 1
           fi
 
+          # Fail SAFE to changed=true when the base commit can't be diffed
+          # against. On a branch-creation push `github.event.before` is the
+          # all-zeros SHA; on a force push the old `before` commit may no
+          # longer be reachable from any ref (fetch-depth 0 won't have it).
+          # Either way `git diff <base> HEAD` would error and fail every gated
+          # caller job. Running CI unnecessarily is the cheap failure mode, so
+          # treat an unresolvable base as "everything changed".
+          zero_sha="0000000000000000000000000000000000000000"
+          if [ "$BASE_SHA" = "$zero_sha" ] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "Base commit '${BASE_SHA}' is the zero SHA or not reachable" >&2
+            echo "(branch creation / force push); failing safe to changed=true." >&2
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Turn the newline-separated paths input into positional args
           # for git diff. Blank lines are dropped so trailing newlines in
           # YAML block scalars don't produce a stray empty pathspec.

@@ -68,6 +68,10 @@ jobs:
           # that most need a token-automount check.
           # $isPod below is a yq variable (not shell) — do not let the shell
           # expand it.
+          # No `|| true`: a yq error (parse failure, expression regression after
+          # a yq bump, missing /tmp/rendered.yaml) must fail the step rather
+          # than swallow into an empty result that prints a false all-clear.
+          # `yq -N` already exits 0 with no output when nothing matches.
           # shellcheck disable=SC2016
           automounts=$(yq -N \
             'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet"
@@ -80,7 +84,7 @@ jobs:
                )}
             | select(.automount != false)
             | .name' \
-            /tmp/rendered.yaml | sort -u || true)
+            /tmp/rendered.yaml | sort -u)
           {
             echo "### Pod Token Automount Audit"
             if [ -z "$automounts" ]; then

@@ -71,13 +71,19 @@ jobs:
           # (false positives on externalsecrets/secretstores/...) and never
           # matches the wildcard, so `resources: ["*"]` bypassed the gate.
           # yq's `==` glob-matches strings, so the wildcard needs a regex.
+          # No `|| true`: this is a blocking security gate, so a yq error
+          # (parse failure on an odd rendered doc, an expression regression
+          # after a yq bump, a missing /tmp/rendered.yaml) must FAIL the job,
+          # not swallow the error into an empty result that reads as "clean".
+          # `yq -N` already emits nothing with exit 0 when no document matches,
+          # so the empty case does not need `|| true`.
           # shellcheck disable=SC2016
           offenders=$(yq -N \
             'select(.kind == "ClusterRole")
             | select([.rules[]? | select(.resources != null) | .resources[]
                 | select(. == "secrets" or test("^\*$"))] | length > 0)
             | .metadata.name' \
-            /tmp/rendered.yaml | sort -u || true)
+            /tmp/rendered.yaml | sort -u)
 
           if [ -n "$offenders" ]; then
             echo "::error::Rendered chart contains ClusterRoles with cluster-wide secrets access:"

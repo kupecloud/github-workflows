@@ -140,6 +140,14 @@ jobs:
           fi
 
           # ---- Pass 2: delete untagged versions that are old AND unreferenced ----
+          # Enumerate ALL versions across every page FIRST, classify them, then
+          # delete. Deleting while paginating forward is a correctness bug on
+          # GitHub's offset pagination: each DELETE shifts the remaining
+          # versions left, so after removing N items from page P the first N
+          # items of the next window are skipped unexamined — a fraction of
+          # prunable versions survives every run. Separating enumeration from
+          # mutation makes the page walk stable regardless of what we delete.
+          delete_ids=()
           page=1
           while :; do
             response=$(gh api \
@@ -174,14 +182,22 @@ jobs:
                 echo "DRY RUN: would delete version ${id} (${digest}, updated ${updated_at})"
                 would_delete=$((would_delete + 1))
               else
-                echo "Deleting version ${id} (${digest}, updated ${updated_at})"
-                gh api --method DELETE \
-                  "/${OWNER_TYPE}/${OWNER}/packages/container/${package_enc}/versions/${id}"
-                deleted=$((deleted + 1))
+                echo "Marking version ${id} for deletion (${digest}, updated ${updated_at})"
+                delete_ids+=("$id")
               fi
             done < <(echo "$response" | jq -r '.[] | [.id, .name, .updated_at, (.metadata.container.tags | length)] | @tsv')
 
             page=$((page + 1))
+          done
+
+          # Mutation phase: enumeration is complete, so deletions can no longer
+          # perturb the page walk above.
+          for id in "${delete_ids[@]:-}"; do
+            [ -n "$id" ] || continue
+            echo "Deleting version ${id}"
+            gh api --method DELETE \
+              "/${OWNER_TYPE}/${OWNER}/packages/container/${package_enc}/versions/${id}"
+            deleted=$((deleted + 1))
           done
 
           echo

@@ -20,6 +20,16 @@ on:
         required: false
         type: string
         default: 1.14.3
+      validate_vars:
+        description: >-
+          Packer variables passed to `packer validate`, as newline-delimited
+          KEY=VALUE pairs (each forwarded verbatim via -var). Defaults to the
+          hcloud dummy token so existing hcloud consumers are unchanged;
+          override for configs that declare a differently named provider token
+          variable, or set to an empty string for configs with no required vars.
+        required: false
+        type: string
+        default: hcloud_token=validation-dummy
 
 permissions:
   contents: read
@@ -51,4 +61,12 @@ jobs:
         run: packer fmt -check -diff ${{ inputs.packer_dir }}
 
       - name: Packer validate
-        run: packer validate -var "hcloud_token=validation-dummy" ${{ inputs.packer_dir }}
+        env:
+          VALIDATE_VARS: ${{ inputs.validate_vars }}
+        run: |
+          args=()
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            args+=(-var "$line")
+          done <<< "$VALIDATE_VARS"
+          packer validate "${args[@]}" ${{ inputs.packer_dir }}

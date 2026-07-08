@@ -13,7 +13,7 @@ on:
       node-version:
         description: Node.js version to install
         required: false
-        default: "20"
+        default: "22"
         type: string
       working-directory:
         description: Directory containing package.json

@@ -21,7 +21,7 @@ on:
         description: Node.js version
         required: false
         type: string
-        default: "20"
+        default: "22"
       build-script:
         description: npm script to run before Docker build
         required: false

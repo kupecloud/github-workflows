@@ -57,63 +57,30 @@ jobs:
 
       - name: Prepare default semantic-release config
         shell: bash
+        env:
+          # job_workflow_sha is only a context property, NOT a default env var
+          # (GITHUB_JOB_WORKFLOW_SHA does not exist), so it must be injected here
+          # to pin the shared default config to this reusable workflow's commit
+          # instead of the mutable `main` branch. Mirrors go-lint.yaml.
+          JOB_WORKFLOW_SHA: ${{ github.job_workflow_sha }}
         run: |
           if [ -f .releaserc.json ]; then
             echo "Using repository .releaserc.json"
             exit 0
           fi
 
-          cat > .releaserc.json <<'JSON'
-          {
-            "branches": ["main"],
-            "plugins": [
-              [
-                "@semantic-release/commit-analyzer",
-                {
-                  "preset": "conventionalcommits",
-                  "parserOpts": {
-                    "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
-                  },
-                  "releaseRules": [
-                    { "type": "feat", "release": "minor" },
-                    { "type": "fix", "release": "patch" },
-                    { "type": "perf", "release": "patch" },
-                    { "type": "refactor", "release": "patch" },
-                    { "type": "docs", "release": false },
-                    { "type": "style", "release": false },
-                    { "type": "chore", "release": false },
-                    { "type": "test", "release": false },
-                    { "type": "ci", "release": false },
-                    { "breaking": true, "release": "major" }
-                  ]
-                }
-              ],
-              [
-                "@semantic-release/release-notes-generator",
-                {
-                  "preset": "conventionalcommits",
-                  "parserOpts": {
-                    "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
-                  },
-                  "presetConfig": {
-                    "types": [
-                      { "type": "feat", "section": "Features" },
-                      { "type": "fix", "section": "Bug Fixes" },
-                      { "type": "perf", "section": "Performance Improvements" },
-                      { "type": "refactor", "section": "Code Refactoring" },
-                      { "type": "docs", "section": "Documentation", "hidden": true },
-                      { "type": "style", "section": "Styles", "hidden": true },
-                      { "type": "chore", "section": "Miscellaneous", "hidden": true },
-                      { "type": "test", "section": "Tests", "hidden": true },
-                      { "type": "ci", "section": "CI/CD", "hidden": true }
-                    ]
-                  }
-                }
-              ],
-              "@semantic-release/github"
-            ]
-          }
-          JSON
+          # Fetch the shared default config (releaserc-default.json) pinned to
+          # the exact commit of *this* reusable workflow, so preview and release
+          # always resolve byte-identical config instead of two inline copies
+          # that can silently drift. github.workflow_sha must NOT be used — in a
+          # reusable workflow the github context is the *caller's*, so it holds
+          # the consumer repo's commit, which does not exist under
+          # kupecloud/github-workflows and would 404. Falls back to main only if
+          # JOB_WORKFLOW_SHA is unset.
+          CONFIG_REF="${JOB_WORKFLOW_SHA:-main}"
+          CONFIG_URL="https://raw.githubusercontent.com/kupecloud/github-workflows/${CONFIG_REF}/releaserc-default.json"
+          echo "No repository .releaserc.json — downloading shared default from ${CONFIG_REF}"
+          curl -sSfL "$CONFIG_URL" -o .releaserc.json
 
       - name: Semantic Release
         id: semantic

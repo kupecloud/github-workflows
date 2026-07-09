@@ -33,7 +33,11 @@ jobs:
 
       - name: Run actionlint
         id: actionlint
-        run: actionlint
+        # actionlint v1.7.12 lacks github.job_workflow_sha in its context schema
+        # and hard-errors on go-lint.yaml's (correct) use of it. Ignore that one
+        # known-good property until a pinned actionlint recognizes it; drop this
+        # -ignore when bumping actionlint past the schema fix.
+        run: actionlint -ignore 'property "job_workflow_sha" is not defined'
 
       - name: actionlint summary
         if: always()

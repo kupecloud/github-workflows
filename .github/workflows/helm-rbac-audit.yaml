@@ -89,9 +89,11 @@ jobs:
             echo "::error::Rendered chart contains ClusterRoles with cluster-wide secrets access:"
             echo "$offenders"
             echo ""
-            echo "Cluster-wide secrets read is a blast-radius amplifier. If this"
-            echo "rule is legitimate, document it in security_best_practices_report.md"
-            echo "and explicitly allowlist it in this workflow call."
+            echo "Cluster-wide secrets read is a blast-radius amplifier. Prefer"
+            echo "narrowing the rule to specific namespaces (a Role, not a"
+            echo "ClusterRole) or to named resources. This gate has no allowlist"
+            echo "input; if the cluster-wide grant is genuinely required, document"
+            echo "the justification in security_best_practices_report.md."
             exit 1
           fi
           echo "OK: no cluster-wide secrets access in rendered ClusterRoles"

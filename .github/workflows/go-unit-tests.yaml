@@ -82,6 +82,12 @@ jobs:
       - name: Run unit tests
         id: unit
         shell: bash
+        # The default test-command uses `go test -race`, which requires cgo.
+        # The actions-runner image defaults CGO_ENABLED=0 (no C toolchain), and
+        # the gcc install above provides the compiler but does not flip CGO back
+        # on — so force it here or the race build fails with exit 2.
+        env:
+          CGO_ENABLED: "1"
         run: |
           set +e
           set -o pipefail

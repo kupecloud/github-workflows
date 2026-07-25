@@ -46,7 +46,7 @@ jobs:
         # self-hosted runner images that don't grant passwordless sudo.
         run: |
           mkdir -p "$HOME/.local/bin"
-          wget -qO "$HOME/.local/bin/yq" https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64
+          curl -fsSLo "$HOME/.local/bin/yq" https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64
           chmod +x "$HOME/.local/bin/yq"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 

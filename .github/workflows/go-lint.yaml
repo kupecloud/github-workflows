@@ -116,6 +116,54 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # Catch a Dockerfile builder image that has drifted BEHIND the go.mod `go`
+  # directive. Our builder images set GOTOOLCHAIN=local, so an older builder
+  # hard-fails with:
+  #   go: go.mod requires go >= 1.26.5 (running 1.26.3; GOTOOLCHAIN=local)
+  #
+  # This drift is silent and expensive: `publish-image` only runs on a release,
+  # so a go.mod bump (typically for a CVE) breaks image publishing weeks before
+  # anyone notices. It cost kupe-api every image publish from v1.4.0 onward —
+  # the tag existed, the image never did — and hit console-connect and
+  # hello-kupe the same way. Running it here, on every push, fails at the
+  # commit that introduces the drift instead of at the next release.
+  #
+  # No-ops for repos without a Dockerfile, without a `golang:` builder, or
+  # where the version can't be parsed — this must never block a repo it
+  # doesn't apply to.
+  go-version-drift:
+    name: go version drift
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Dockerfile builder >= go.mod
+        run: |
+          if [ ! -f Dockerfile ] || [ ! -f go.mod ]; then
+            echo "No Dockerfile or go.mod — nothing to check."
+            exit 0
+          fi
+
+          gomod=$(grep -oE '^go [0-9]+(\.[0-9]+)*' go.mod | head -1 | awk '{print $2}')
+          builder=$(grep -oE 'golang:[0-9]+(\.[0-9]+)*' Dockerfile | head -1 | cut -d: -f2)
+
+          if [ -z "$gomod" ] || [ -z "$builder" ]; then
+            echo "Could not parse versions (go.mod='$gomod' builder='$builder') — skipping."
+            exit 0
+          fi
+
+          # sort -V puts the lower version first. The builder is acceptable when
+          # it is >= go.mod, i.e. when go.mod is the lower of the two (equal
+          # versions also land go.mod first, which is fine).
+          lower=$(printf '%s\n%s\n' "$gomod" "$builder" | sort -V | head -1)
+          if [ "$lower" != "$gomod" ]; then
+            echo "::error file=Dockerfile::Builder image golang:$builder is OLDER than the go.mod directive (go $gomod). Because the builder sets GOTOOLCHAIN=local, the image build will fail with 'go.mod requires go >= $gomod'. Bump the Dockerfile FROM tag (and its digest, if pinned) to >= $gomod."
+            exit 1
+          fi
+
+          echo "OK: builder golang:$builder >= go.mod go $gomod"
+
   go-fmt:
     name: gofmt
     runs-on: ${{ inputs.runs-on }}

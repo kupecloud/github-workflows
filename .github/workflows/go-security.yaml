@@ -297,4 +297,25 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           done
 
-          exit "$EXIT_CODE"
+          # Gate on what is actionable: a vulnerability fails the job only when
+          # it is reachable from our code AND upstream has published a fix.
+          # govulncheck's own exit code is 3 for *any* affecting vuln, which
+          # pinned repos on permanent red for advisories with no fix available
+          # (k8s.io/kubernetes, docker/docker) — unactionable noise that trains
+          # people to ignore the job. Unfixable-but-reachable vulns still surface
+          # as a warning annotation and in the step summary.
+          if [ "$CALLED_FIXABLE" -gt 0 ]; then
+            summary ""
+            summary "❌ **Failing:** ${CALLED_FIXABLE} reachable vulnerabilit(y|ies) with a published fix — upgrade the module(s) above."
+            echo "::error::${CALLED_FIXABLE} reachable vulnerability(ies) have fixes available; upgrade to clear them."
+            exit 1
+          fi
+
+          UNFIXABLE_CALLED=$((CALLED_COUNT - CALLED_FIXABLE))
+          if [ "$UNFIXABLE_CALLED" -gt 0 ]; then
+            summary ""
+            summary "⚠️ **${UNFIXABLE_CALLED} reachable vulnerabilit(y|ies) have no upstream fix yet** — not failing the build; re-check when upstream ships one."
+            echo "::warning::${UNFIXABLE_CALLED} reachable vulnerability(ies) have no fix available yet."
+          fi
+
+          exit 0

@@ -41,12 +41,19 @@ repos:
       - id: codespell
         args:
           - --write-changes
+          # `vulnerabilit(y|ies)` in go-security.yaml is deliberate — one string
+          # covering both singular and plural. codespell sees the bare prefix.
+          - --ignore-words-list=vulnerabilit
 
   - repo: local
     hooks:
       - id: actionlint
         name: actionlint
-        entry: bash -c 'GOWORK=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12'
+        # -ignore drops a false positive: `github.job_workflow_sha` is a real
+        # context property for reusable workflows, but actionlint v1.7.12's
+        # bundled schema doesn't know it. Used by go-lint, semantic-release and
+        # semantic-release-preview to pin the shared config to the workflow SHA.
+        entry: bash -c 'GOWORK=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -ignore "job_workflow_sha"'
         language: system
         pass_filenames: false
         files: ^\.github/workflows/.*\.ya?ml$

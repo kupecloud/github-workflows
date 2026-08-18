@@ -19,9 +19,21 @@ on:
         value: ${{ jobs.preview.outputs.new_release_version }}
 
 # Dry-run only: computes the next version and publishes nothing
-# (dry_run: true, persist-credentials: false). Read-only is sufficient.
+# (dry_run: true, persist-credentials: false).
+#
+# contents:write is REQUIRED and must not be reduced to read. semantic-release
+# core calls verifyAuth() unconditionally (index.js, no dryRun guard), which runs
+# `git push --dry-run --no-verify <url> HEAD:<branch>`. --dry-run is client-side
+# only: the remote still authorises the ref update, so a read-only token gets
+# 403 and the job dies with EGITNOPERMISSION before any plugin runs. That check
+# is the point of a preview — it proves the real release would be allowed to push.
+# Reducing this to `contents: read` (v2.2.7-v2.3.1, finding F5) broke every
+# consumer that bumped past v2.2.6.
+#
+# issues/pull-requests write are NOT needed: they are only used by the
+# success/fail steps, which dry-run skips.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   preview:

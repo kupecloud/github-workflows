@@ -200,6 +200,16 @@
       "commitMessageTopic": "Terraform providers"
     },
     {
+      "description": "Do NOT track `required_version`. Every kupecloud IaC repo runs OpenTofu, but Renovate's terraform manager resolves `required_version` against hashicorp/terraform releases, so it proposes constraints no tofu binary can satisfy (kupecloud/cloudflare#8 asked for `~> 1.15.0` when the newest OpenTofu was 1.12.5). The OpenTofu binary version is owned by coresolutionsltd/tofu-github-action (bundled default + checksums) and reaches repos through that action's SHA pin, which the github-actions manager already tracks; `required_version` is a hand-maintained floor. Added 2026-08-19.",
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchDepTypes": [
+        "required_version"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Group pre-commit hook updates",
       "matchManagers": [
         "pre-commit"

@@ -12,8 +12,14 @@ inputs:
     description: "Tofu action `steps` input (e.g. `validate,lint`, `test`, `checkov`, `plan`, `apply`)."
     required: true
   version:
-    description: OpenTofu version.
-    required: true
+    description: >-
+      OpenTofu version override. Leave empty to use the version bundled with
+      the pinned coresolutionsltd/tofu-github-action release (its default ships
+      with verified checksums; any other value requires checksums the action
+      does not have and fails at install). Bump OpenTofu by bumping the action
+      pin below, which Renovate tracks.
+    required: false
+    default: ""
   env:
     description: Environment name, forwarded to the tofu action.
     required: false
@@ -61,7 +67,7 @@ runs:
     - name: Run tofu action
       # Third-party action — receives caller-resolved secret tfvars and backend
       # creds. Pin bumps must go through credential-touching-dependency review.
-      uses: coresolutionsltd/tofu-github-action@e6ba9a54d84561200dcfd32cc045776e23b128e8 # v1.10.0
+      uses: coresolutionsltd/tofu-github-action@b00e04b6764dd9dc2db28d8251f9fb3f23698396 # v1.11.0
       with:
         steps: ${{ inputs.steps }}
         version: ${{ inputs.version }}

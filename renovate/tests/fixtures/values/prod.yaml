@@ -1,0 +1,54 @@
+# Fixture for tests/check_regex_fixtures.py — a trimmed copy of the shape of
+# kupecloud/argocd values/prod.yaml. Exercises the argocd prod-pin custom
+# manager (customManagers[1] in default.json):
+#
+#   - the commented-out format example (openbao) and the commented-out
+#     promotion snippets (external-dns) must NOT bind to any real entry
+#   - the real pinned entry (cert-manager) must extract cleanly
+#   - the zero-SHA crds placeholder is hex, so it matches by design
+#
+# Format for each entry:
+#
+#   - name: openbao
+#     namespace: openbao
+#     repoURL: https://github.com/kupecloud/openbao.git
+#     gitRevision: <40-char-sha>  # vX.Y.Z
+#     path: "."
+#     valuesPath: values
+#     syncWave: "1"
+
+coreServices:
+  charts:
+    - name: cert-manager
+      namespace: cert-manager
+      repoURL: https://github.com/kupecloud/cert-manager.git
+      gitRevision: a1b2c3d4e5f60718293a4b5c6d7e8f9012345678  # v1.2.3
+      path: "."
+      valuesPath: values
+      syncWave: "1"
+
+mgmtServices:
+  charts: []
+  # When promoting external-dns to prod, copy these two entries into the
+  # charts list above and pin `gitRevision` to a 40-char SHA + `# vX.Y.Z`:
+  #
+  #   - name: external-dns-platform
+  #     namespace: external-dns
+  #     repoURL: https://github.com/kupecloud/external-dns.git
+  #     gitRevision: <40-char-sha>  # vX.Y.Z
+  #     path: "."
+  #     valuesPath: values/platform
+  #     syncWave: "1"
+  #   - name: external-dns-tenant
+  #     namespace: external-dns
+  #     repoURL: https://github.com/kupecloud/external-dns.git
+  #     gitRevision: <40-char-sha>  # vX.Y.Z
+  #     path: "."
+  #     valuesPath: values/tenant
+  #     syncWave: "1"
+
+# CRDs appset — pinned SHA for prod. Placeholder zero-SHA until the crds
+# repo has a release tag.
+mgmtCrds:
+  repoURL: https://github.com/kupecloud/crds.git
+  gitRevision: "0000000000000000000000000000000000000000"  # v0.0.0

@@ -100,3 +100,16 @@ jobs:
               echo "- Review the job logs for details."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  renovate-preset:
+    # renovate/default.json is consumed by EVERY kupecloud repo via
+    # `extends: ["local>kupecloud/github-workflows//renovate/default"]`, so a bad
+    # merge here breaks dependency management org-wide. Validate on every PR.
+    name: renovate preset
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Validate preset and regex fixtures
+        run: ./renovate/tests/validate.sh

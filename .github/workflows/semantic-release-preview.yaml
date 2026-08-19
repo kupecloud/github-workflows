@@ -99,14 +99,17 @@ jobs:
           # or @semantic-release/git (crds, kupe-api, observability, vcluster,
           # kupe-control-operator, ...) fails the preview with "Cannot find
           # module" unless those plugins are installed here too.
+          # extra_plugins is a newline-separated package list — it does NOT accept
+          # comments; any '#' line is treated as a package name to install.
+          #
+          # conventional-changelog-conventionalcommits is PINNED. Unpinned it floats
+          # to latest, and 10.4.0 (published 2026-08-18 21:37) broke every release in
+          # the org: it requires conventional-changelog-writer@9+, while
+          # semantic-release 24's release-notes-generator depends on writer ^8.0.0
+          # ("Missing helper: conventional-changelog-conventionalcommits requires
+          # conventional-changelog-writer@9 or newer"). Bump only alongside a
+          # semantic-release major that ships writer 9.
           extra_plugins: |
-            # PINNED. Unpinned, this floats to latest and broke every release in
-            # the org on 2026-08-19: 10.4.0 (published 2026-08-18 21:37) requires
-            # conventional-changelog-writer@9+, but semantic-release 24's
-            # release-notes-generator depends on writer ^8.0.0 —
-            # "Missing helper: conventional-changelog-conventionalcommits requires
-            # conventional-changelog-writer@9 or newer". Bump only alongside a
-            # semantic-release major that ships writer 9.
             conventional-changelog-conventionalcommits@10.3.0
             @semantic-release/exec
             @semantic-release/git

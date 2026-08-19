@@ -1,0 +1,278 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset for all kupecloud repos. Lives here, in a PUBLIC repo, because a preset hosted in a private repo cannot be resolved by public repos — Renovate fails with \"Cannot find preset's package\" and stops raising PRs for them entirely. Consume with: {\"extends\": [\"local>kupecloud/github-workflows//renovate/default\"]}",
+  "ignorePresets": [
+    "mergeConfidence:all-badges"
+  ],
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":rebaseStalePrs",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "schedule": [
+    "before 9am on Monday"
+  ],
+  "timezone": "Europe/London",
+  "minimumReleaseAge": "7 days",
+  "prConcurrentLimit": 20,
+  "prHourlyLimit": 10,
+  "branchConcurrentLimit": 30,
+  "labels": [
+    "dependencies"
+  ],
+  "addLabels": [],
+  "fetchChangeLogs": "pr",
+  "pinDigests": true,
+  "postUpdateOptions": [
+    "helmUpdateSubChartArchives",
+    "gomodTidy"
+  ],
+  "osvVulnerabilityAlerts": true,
+  "configMigration": true,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.terraform/**",
+    "**/vendor/**"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": [
+      "security",
+      "high-priority"
+    ],
+    "minimumReleaseAge": "0 days",
+    "schedule": [
+      "at any time"
+    ],
+    "prBodyNotes": [
+      "🛡️  **Security update** — Renovate raised this PR in response to a vulnerability advisory affecting one or more direct or transitive dependencies.",
+      "The 7-day quarantine and the cadence schedule are bypassed for security-driven updates so the fix can be reviewed and merged promptly.",
+      "Review the advisory details below and the linked CVE before merging."
+    ]
+  },
+  "prBodyNotes": [
+    "⚠️  **Review release notes for breaking changes before merging.**",
+    "All Renovate PRs in this org require human review — automerge is disabled per security policy."
+  ],
+  "customManagers": [
+    {
+      "description": "Inline image strings — catches `image: <registry>/<path>:<tag>(@<digest>)?` in any values.yaml that is NOT in the standard nested image.repository/image.tag form. Currently used by vcluster/values.yaml (vcluster-generic-sync-plugin) and console/chart/values/{dev,prod}.yaml (headlamp + console + console-metrics-plugin). Renovate's helm-values manager handles the standard nested form natively; this regex catches the inline-string deviations.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)values\\.yaml$/",
+        "/(^|/)values/[^/]+\\.yaml$/"
+      ],
+      "matchStrings": [
+        "image:[ \\t]+[\"']?(?<depName>(?:ghcr\\.io|docker\\.io|quay\\.io|gcr\\.io|registry\\.k8s\\.io)/[a-zA-Z0-9._/-]+):(?<currentValue>[a-zA-Z0-9._+-]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Argocd gitRevision in values/prod.yaml — pins prod ApplicationSet refs to git tag SHAs with a trailing `# vX.Y.Z` comment. Renovate updates both the SHA and the comment together when a new release tag exists in the source repo. managerFilePatterns is evaluated relative to the scanned repo's root (in kupecloud/argocd the file is values/prod.yaml), so it is deliberately wide; the matchString's kupecloud repoURL requirement scopes it. Both keys are line-anchored (^\\s* cannot cross a #) so commented-out example entries never bind to real gitRevision lines. Dev values use `gitRevision: main` which has no version concept.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)values/prod\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?sm)^\\s*repoURL:\\s+https://github\\.com/kupecloud/(?<packageName>[a-zA-Z0-9_-]+)\\.git.*?^\\s*gitRevision:\\s+[\"']?(?<currentDigest>[a-f0-9]{40})[\"']?\\s*#\\s*(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "depNameTemplate": "kupecloud/{{packageName}}",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "Argo Application chart pins in Helm values that reference a kupecloud chart repo by RELEASE TAG (`targetRevision: \"vX.Y.Z\"`) — the kupe-control-operator's per-tenant vcluster / cluster-base / alloy-tenant Application templates. The values file has no repoURL next to every pin (env overlays override only targetRevision), so the dependency is declared on the preceding line with a `# renovate: github-releases=kupecloud/<repo>` marker; Renovate bumps the tag when a new release exists. Line-anchored so unrelated `targetRevision: main` entries (dev) never bind. Added 2026-08-18 — the operator values comment had claimed Renovate coverage that did not exist.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)chart/values\\.yaml$/",
+        "/(^|/)chart/values/[^/]+\\.yaml$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*github-releases=(?<depName>kupecloud/[a-zA-Z0-9_-]+)[^\\n]*\\n\\s*targetRevision:\\s*[\"']?(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)[\"']?"
+      ],
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "First-party kupecloud images bypass the 7-day quarantine AND the weekly cadence. We control the build, so a new tag is trusted as soon as it lands on GHCR. Enables the internal-dep cascade (e.g. console-metrics-plugin release immediately raises a PR in the console repo). Still requires human review (no automerge). Detection latency is bounded by the Mend hosted App's scan cadence (~4h on the Community tier).",
+      "matchPackageNames": [
+        "/^ghcr\\.io/kupecloud//"
+      ],
+      "minimumReleaseAge": "0 days",
+      "schedule": [
+        "at any time"
+      ],
+      "labels": [
+        "dependencies",
+        "first-party"
+      ]
+    },
+    {
+      "description": "Self-hosted GitHub Actions runner image — bypasses BOTH the 7-day quarantine and the weekly cadence. GitHub stops queuing jobs to a runner more than 30 days past a release, and ARC converts the resulting exit-code-7 into a TERMINAL Outdated state that deletes the scale set's listener and its GitHub-side registration, recoverable only by a spec change (not a restart). A stale pin here is a CI OUTAGE, not a missed feature: it cost ~6 days of prod CI on 2026-08-13, detected by Renovate but never opened as a PR. Weekly batching + 7-day quarantine + review latency can consume most of the 30-day budget, so these are proposed the moment they are detected. Human review still applies. Backstop: the runner-version freshness alert in kupecloud/observability.",
+      "matchPackageNames": [
+        "ghcr.io/actions/actions-runner"
+      ],
+      "minimumReleaseAge": "0 days",
+      "schedule": [
+        "at any time"
+      ],
+      "labels": [
+        "dependencies",
+        "runner-image",
+        "high-priority"
+      ],
+      "prBodyNotes": [
+        "⏰ **CI availability deadline** — GitHub stops queuing jobs to self-hosted runners more than 30 days past a runner release. Merging this late causes a full CI outage that cannot be fixed by restarting anything; see the failure-chain comment on the `FROM` line in kupecloud/github-runners `Dockerfile`."
+      ]
+    },
+    {
+      "description": "Block major version bumps from auto-merge AND add explicit warnings in the PR body. Already prevented from automerge by the global no-automerge stance, but the warning helps reviewers triage major bumps as breaking-by-default.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "labels": [
+        "dependencies",
+        "breaking",
+        "needs-review"
+      ],
+      "prBodyNotes": [
+        "🚨 **MAJOR VERSION BUMP** — review breaking changes carefully before merging.",
+        "Run `helm template` (for chart bumps), `go test ./...` (for Go deps), `npm run build` (for Node deps), or the relevant local validation before approving."
+      ]
+    },
+    {
+      "description": "Custom regex manager updates (inline image strings + argocd gitRevisionProd) — same review policy as helm-values, with a label so they are easy to identify in the PR list.",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "labels": [
+        "dependencies",
+        "image-pin"
+      ]
+    },
+    {
+      "description": "Group Go Kubernetes dependencies",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "/^k8s\\.io//",
+        "/^sigs\\.k8s\\.io//"
+      ],
+      "groupName": "kubernetes-go",
+      "commitMessageTopic": "Kubernetes Go dependencies"
+    },
+    {
+      "description": "Group Go non-Kubernetes dependencies",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "!/^k8s\\.io//",
+        "!/^sigs\\.k8s\\.io//"
+      ],
+      "groupName": "go-dependencies",
+      "commitMessageTopic": "Go dependencies"
+    },
+    {
+      "description": "Group npm non-major updates",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "npm-dependencies",
+      "commitMessageTopic": "npm dependencies"
+    },
+    {
+      "description": "Group Terraform provider updates",
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchDepTypes": [
+        "provider"
+      ],
+      "groupName": "terraform-providers",
+      "commitMessageTopic": "Terraform providers"
+    },
+    {
+      "description": "Group pre-commit hook updates",
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "groupName": "pre-commit-hooks",
+      "commitMessageTopic": "pre-commit hooks"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github-actions",
+      "commitMessageTopic": "GitHub Actions"
+    },
+    {
+      "description": "Group Dockerfile base-image DIGEST refreshes per repo into a single PR on the org cadence (weekly default). Tag updates (X.Y.Z to X.Y.Z+1) still get their own per-image PRs because those are real version bumps, not digest churn. This rule is what makes Layer 3 base-image digest pinning manageable.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "groupName": "base-image digest refresh",
+      "commitMessageTopic": "base-image digests"
+    },
+    {
+      "description": "Helm chart dep updates — explicitly NOT grouped (per-component PRs). Each chart bump gets its own PR.",
+      "matchManagers": [
+        "helmv3"
+      ],
+      "addLabels": [
+        "helm"
+      ]
+    },
+    {
+      "description": "Helm chart MAJOR bumps add the helm-major label for filtering.",
+      "matchManagers": [
+        "helmv3"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "addLabels": [
+        "helm-major"
+      ]
+    },
+    {
+      "description": "Label Docker base image updates (dockerfile manager).",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "addLabels": [
+        "docker"
+      ]
+    },
+    {
+      "description": "Label Terraform updates",
+      "matchManagers": [
+        "terraform"
+      ],
+      "addLabels": [
+        "terraform"
+      ]
+    },
+    {
+      "description": "Label Go updates",
+      "matchManagers": [
+        "gomod"
+      ],
+      "addLabels": [
+        "go"
+      ]
+    }
+  ]
+}

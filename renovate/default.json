@@ -273,6 +273,13 @@
       "addLabels": [
         "go"
       ]
+    },
+    {
+      "description": "TypeScript is held below 7 estate-wide. TS 7 (GA 2026-07-08) is the native Go rewrite, and the typescript-eslint ecosystem has not shipped support: even @typescript-eslint/parser 8.67.1-alpha.18 (canary) still peers 'typescript >=4.8.4 <6.1.0'. Any repo that lints TypeScript therefore cannot take TS 7, so Renovate would keep raising a PR that can never merge (it did, as kupecloud/console#14). This is NOT a headlamp-plugin limitation — @kinvolk/headlamp-plugin 0.14.0 is current and recommended. Remove this rule once typescript-eslint widens its peer range.",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7"
     }
   ]
 }

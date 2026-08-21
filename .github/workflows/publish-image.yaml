@@ -88,5 +88,13 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          cosign sign --yes \
+          # --new-bundle-format=false: sign with the legacy tag-based .sig
+          # format, NOT the sigstore bundle. GHCR does not serve the OCI
+          # referrers API (404 MANIFEST_UNKNOWN even when the fallback tag
+          # exists — verified live 2026-08-21) and kyverno's SigstoreBundle
+          # discovery has no tag fallback, so bundle-signed images are
+          # unverifiable by the platform policy. Legacy .sig is what
+          # verify-platform-images (type: Cosign) verifies. Revisit when
+          # kyverno's GHCR bundle discovery works end-to-end.
+          cosign sign --yes --new-bundle-format=false \
             "ghcr.io/${{ github.repository }}@${DIGEST}"

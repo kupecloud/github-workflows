@@ -50,6 +50,16 @@ jobs:
 
       - name: Install cosign
         uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+        with:
+          # Pin the cosign BINARY, not just the action.
+          #
+          # cosign-installer bakes its default cosign version into each action
+          # release (v4.1.1 defaults to v3.0.5), so bumping the action silently
+          # changes the tool's MAJOR version — and cosign v3 flipped the
+          # defaults of both flags the sign step below depends on. Declaring the
+          # version here makes that a reviewable input instead of a side effect,
+          # and lets renovate track the two independently.
+          cosign-release: v3.0.5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -96,5 +106,22 @@ jobs:
           # unverifiable by the platform policy. Legacy .sig is what
           # verify-platform-images (type: Cosign) verifies. Revisit when
           # kyverno's GHCR bundle discovery works end-to-end.
-          cosign sign --yes --new-bundle-format=false \
+          #
+          # BOTH flags are required, and passing only the first is a hard error
+          # on cosign v3:
+          #
+          #   must provide --new-bundle-format or --bundle where applicable
+          #   with --signing-config or --use-signing-config
+          #
+          # cosign v3 defaults BOTH --new-bundle-format and --use-signing-config
+          # to true, and the latter refuses to run without the former, so the
+          # legacy format needs the signing-config opt-out as well. Both flags
+          # also exist on cosign v2 (where both already default to false), so
+          # this command is correct on either major — which is what makes a
+          # future cosign bump safe rather than silently format-changing.
+          #
+          # Do not "simplify" this back to a bare `cosign sign --yes`: on
+          # cosign v3 that SUCCEEDS and emits a new-format bundle, so CI stays
+          # green while the platform policy can no longer verify the image.
+          cosign sign --yes --new-bundle-format=false --use-signing-config=false \
             "ghcr.io/${{ github.repository }}@${DIGEST}"

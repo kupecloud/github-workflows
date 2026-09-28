@@ -290,6 +290,13 @@
         "typescript"
       ],
       "allowedVersions": "<7"
+    },
+    {
+      "description": "cosign is held below 3.1 estate-wide. Images signed with cosign v3.1.3 fail kyverno verify-platform-images with 'x509: certificate signed by unknown authority' (kupe-control-operator v1.10.2, 2026-09-28), while v3.0.5 signatures made the same day (kupe-signup-service v1.8.3, console-connect v1.9.2) verify. Probe a v3.1+ signed image against the live policy (server-side dry-run, read the kyverno.io/verify-images annotation) before removing this rule.",
+      "matchPackageNames": [
+        "sigstore/cosign"
+      ],
+      "allowedVersions": "<3.1.0"
     }
   ]
 }

@@ -58,7 +58,7 @@
   ],
   "customManagers": [
     {
-      "description": "Inline image strings — catches `image: <registry>/<path>:<tag>(@<digest>)?` in any values.yaml that is NOT in the standard nested image.repository/image.tag form. Currently used by vcluster/values.yaml (vcluster-generic-sync-plugin) and console/chart/values/{dev,prod}.yaml (headlamp + console + console-metrics-plugin). Renovate's helm-values manager handles the standard nested form natively; this regex catches the inline-string deviations.",
+      "description": "Inline image strings — catches `image: <registry>/<path>:<tag>(@<digest>)?` in any values.yaml that is NOT in the standard nested image.repository/image.tag form. Currently used by vcluster/values.yaml (vcluster-generic-sync-plugin) and console/chart/values/{dev,prod}.yaml (headlamp + console + console-metrics-plugin). Renovate's helm-values manager handles the standard nested form natively; this regex catches the inline-string deviations. autoReplaceStringTemplate is REQUIRED for pinDigests to take effect here: without it Renovate can only swap the captured tag and has nowhere to insert a digest (console#20 bumped headlamp to v0.45.0 with no digest). The template rewrites the whole match, so quotes and extra spacing are normalised to `image: <dep>:<tag>@<digest>` (every matched line was already unquoted with one space, 2026-09-29).",
       "customType": "regex",
       "managerFilePatterns": [
         "/(^|/)values\\.yaml$/",
@@ -67,7 +67,8 @@
       "matchStrings": [
         "image:[ \\t]+[\"']?(?<depName>(?:ghcr\\.io|docker\\.io|quay\\.io|gcr\\.io|registry\\.k8s\\.io)/[a-zA-Z0-9._/-]+):(?<currentValue>[a-zA-Z0-9._+-]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
       ],
-      "datasourceTemplate": "docker"
+      "datasourceTemplate": "docker",
+      "autoReplaceStringTemplate": "image: {{{depName}}}:{{{newValue}}}{{#if newDigest}}@{{{newDigest}}}{{/if}}"
     },
     {
       "description": "Argocd gitRevision in values/prod.yaml — pins prod ApplicationSet refs to git tag SHAs with a trailing `# vX.Y.Z` comment. Renovate updates both the SHA and the comment together when a new release tag exists in the source repo. managerFilePatterns is evaluated relative to the scanned repo's root (in kupecloud/argocd the file is values/prod.yaml), so it is deliberately wide; the matchString's kupecloud repoURL requirement scopes it. Both keys are line-anchored (^\\s* cannot cross a #) so commented-out example entries never bind to real gitRevision lines. Dev values use `gitRevision: main` which has no version concept.",
@@ -297,6 +298,11 @@
         "sigstore/cosign"
       ],
       "allowedVersions": "<3.1.0"
+    },
+    {
+      "description": "Never digest-pin moving `:dev` tags (console/chart/values/dev.yaml, vcluster/values.yaml): dev deliberately runs the latest laptop/CI-pushed `:dev`, and a pinned digest would freeze it.",
+      "matchCurrentValue": "dev",
+      "pinDigests": false
     }
   ]
 }

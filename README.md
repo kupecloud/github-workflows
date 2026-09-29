@@ -97,10 +97,12 @@ digest, build before releasing:
    `@semantic-release/exec` prepareCmd guards and stamps, e.g.
 
    ```sh
-   test -n "$IMAGE_DIGEST" && test "$IMAGE_VERSION" = "${nextRelease.version}" && sed ... tag: "v${nextRelease.version}@$IMAGE_DIGEST"
+   test -n "$IMAGE_DIGEST" && test "$IMAGE_VERSION" = "${nextRelease.version}" && sed -i -E '... tag: "v${nextRelease.version}@'"$IMAGE_DIGEST"'"|' chart/values/prod.yaml
    ```
 
-   (`$IMAGE_DIGEST` without braces: `${...}` is lodash template syntax.)
+   Write `$IMAGE_DIGEST` without braces, because `${...}` is lodash template
+   syntax. Close the single quotes around it, or the shell never expands it
+   and the chart is stamped with the literal text `$IMAGE_DIGEST`.
 
 A release that fails after step 2 leaves an image with no git tag; the next
 run computes the same version and overwrites it.

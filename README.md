@@ -7,6 +7,7 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 * [Security posture](#security-posture)
 * [Available workflows](#available-workflows)
 * [Usage](#usage)
+  * [Digest-pinned image releases](#digest-pinned-image-releases)
 * [This Repo](#this-repo)
 * [Example](#example)
 * [Cleanup GHCR](#cleanup-ghcr)
@@ -82,6 +83,27 @@ For Terraform repositories that need the computed semantic version during
 `plan` and `apply`, use `semantic-release-preview.yaml` before deploy to
 derive `new_release_published` and `new_release_version`, then run the real
 `semantic-release.yaml` publish step after a successful deploy.
+
+### Digest-pinned image releases
+
+To make the release commit (the one the git tag points at) pin the image by
+digest, build before releasing:
+
+1. `semantic-release-preview.yaml` computes the next version.
+2. `publish-image.yaml` builds, pushes and signs that version and outputs
+   `digest`.
+3. `semantic-release.yaml` runs with `image-digest` and `image-version`, which
+   reach semantic-release as `$IMAGE_DIGEST` / `$IMAGE_VERSION`. The repo's
+   `@semantic-release/exec` prepareCmd guards and stamps, e.g.
+
+   ```sh
+   test -n "$IMAGE_DIGEST" && test "$IMAGE_VERSION" = "${nextRelease.version}" && sed ... tag: "v${nextRelease.version}@$IMAGE_DIGEST"
+   ```
+
+   (`$IMAGE_DIGEST` without braces: `${...}` is lodash template syntax.)
+
+A release that fails after step 2 leaves an image with no git tag; the next
+run computes the same version and overwrites it.
 
 ## This Repo
 

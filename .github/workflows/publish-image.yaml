@@ -34,6 +34,13 @@ on:
         required: false
         type: string
         default: ""
+    outputs:
+      digest:
+        description: >-
+          Manifest digest (sha256:...) of the pushed and signed image. Callers
+          that build BEFORE semantic-release pass it to semantic-release.yaml's
+          image-digest input so the release commit pins tag@digest.
+        value: ${{ jobs.publish.outputs.digest }}
 
 permissions:
   contents: read
@@ -44,6 +51,8 @@ jobs:
   publish:
     name: Build, Push & Sign
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

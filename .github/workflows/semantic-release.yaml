@@ -10,6 +10,25 @@ on:
         required: false
         default: ubuntu-latest
         type: string
+      image-digest:
+        description: >-
+          Digest (sha256:...) of an image already built and signed for this
+          release. Exported to semantic-release as $IMAGE_DIGEST so a repo's
+          @semantic-release/exec prepareCmd can stamp tag@digest into the
+          release commit. Use with semantic-release-preview.yaml ->
+          publish-image.yaml (digest output) -> this workflow. Empty = unset.
+        required: false
+        default: ""
+        type: string
+      image-version:
+        description: >-
+          Version (no leading v) the image-digest was built for, exported as
+          $IMAGE_VERSION. prepareCmd should fail unless it equals
+          ${nextRelease.version}, so a digest can never be stamped onto a
+          different release than the one it was built for.
+        required: false
+        default: ""
+        type: string
     outputs:
       new_release_published:
         description: Whether a new release was published
@@ -108,6 +127,8 @@ jobs:
             @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_DIGEST: ${{ inputs.image-digest }}
+          IMAGE_VERSION: ${{ inputs.image-version }}
 
       - name: Release info
         if: steps.semantic.outputs.new_release_published == 'true'

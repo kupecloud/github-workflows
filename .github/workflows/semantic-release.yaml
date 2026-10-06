@@ -62,6 +62,48 @@ jobs:
           # commits — they'd otherwise loop into the next release run.
           persist-credentials: true
 
+      # Close the "main moved while we queued" race, which silently eats
+      # releases.
+      #
+      # semantic-release refuses to publish when its checkout is behind the
+      # remote branch ("The local branch main is behind the remote one,
+      # therefore a new version won't be published") and then exits 0 — so CI
+      # goes green, no release exists, and nothing says so. Seen 2026-10-06 on
+      # three repos at once: a commit touching only `.pre-commit-config.yaml`
+      # landed 29 SECONDS before the release step started, and because that path
+      # is not in any `on: push` `paths:` filter it produced no run of its own
+      # either, so no later run would have cut the release. The releasable
+      # commits sat untagged on main indefinitely behind a green dashboard.
+      # The trigger is latency, not the commit: a busy self-hosted scale set can
+      # put 13+ minutes between the push and this step.
+      #
+      # Fast-forwarding is only correct when our checkout is a STRICT ANCESTOR of
+      # the remote tip — then the tip is a superset that still contains our
+      # commits, which is exactly the release semantic-release would have cut had
+      # it run on the tip. If HEAD has DIVERGED (not an ancestor) we leave the
+      # checkout alone and let semantic-release make its own call, because
+      # fast-forwarding there would release unrelated work.
+      - name: Fast-forward if the branch advanced while this run queued
+        shell: bash
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin "$BRANCH" || {
+            echo "could not fetch origin/$BRANCH — leaving checkout as-is"; exit 0; }
+          LOCAL="$(git rev-parse HEAD)"
+          REMOTE="$(git rev-parse "origin/$BRANCH")"
+          if [ "$LOCAL" = "$REMOTE" ]; then
+            echo "checkout is already origin/$BRANCH ($LOCAL) — nothing to do"
+          elif git merge-base --is-ancestor "$LOCAL" "$REMOTE"; then
+            echo "origin/$BRANCH advanced $LOCAL -> $REMOTE while this run queued."
+            echo "HEAD is an ancestor, so fast-forwarding; the release will cover our commits plus the newer ones."
+            git checkout -B "$BRANCH" "$REMOTE"
+          else
+            echo "HEAD ($LOCAL) is NOT an ancestor of origin/$BRANCH ($REMOTE) — diverged."
+            echo "Leaving the checkout alone; semantic-release decides."
+          fi
+
       # semantic-release is a Node tool — the cycjimmy action below runs
       # `npm ci` to install it and its plugins. Cloud-hosted runners
       # (ubuntu-latest) ship Node pre-installed, but the minimal

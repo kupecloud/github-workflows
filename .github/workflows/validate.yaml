@@ -11,6 +11,9 @@ on:
         default: ubuntu-latest
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   actionlint:
     name: actionlint
@@ -28,6 +31,7 @@ jobs:
       - name: Install actionlint
         shell: bash
         run: |
+          set -euo pipefail
           GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
@@ -42,6 +46,7 @@ jobs:
       - name: actionlint summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.actionlint.outcome }}" = "success" ]; then
             {
               echo "### actionlint"
@@ -77,6 +82,7 @@ jobs:
       - name: Install golangci-lint
         shell: bash
         run: |
+          set -euo pipefail
           GOBIN="$RUNNER_TEMP/bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
@@ -87,6 +93,7 @@ jobs:
       - name: golangci config summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.golangci-config.outcome }}" = "success" ]; then
             {
               echo "### golangci config verify"

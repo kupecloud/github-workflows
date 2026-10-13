@@ -15,6 +15,7 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
   * [Inputs](#inputs)
   * [Caller configuration](#caller-configuration)
   * [Retention choice](#retention-choice)
+* [Promtool Rules](#promtool-rules)
 
 <!-- Regenerate with "pre-commit run -a markdown-toc" -->
 
@@ -43,6 +44,8 @@ Reusable GitHub Actions workflows with a deliberately small dependency surface.
 * `helm-lint.yaml`: `helm lint` for a chart path you supply
 * `pre-commit.yaml`: reusable `pre-commit run` with optional Go, Node, and
   Helm setup for repo-specific hooks
+* `promtool-rules.yaml`: checksum-verified yq and promtool, then the
+  caller's alert rule test script (see [Promtool Rules](#promtool-rules))
 * `semantic-release-preview.yaml`: computes whether the current `main` commit
   would release and what the next version would be, without publishing
 * `semantic-release.yaml`: semantic versioning and GitHub release creation,
@@ -264,3 +267,36 @@ times per day during active development. It keeps enough history to
 roll back recent `:dev` or `:main` pushes while still pruning aggressively.
 Pass a larger value for repositories where the reused tag changes only
 during a release window.
+
+## Promtool Rules
+
+`promtool-rules.yaml` gates a chart's alert rules. It installs yq and
+promtool (and lokitool when asked), checks each download against the SHA-256
+its upstream release publishes before running it, then runs the calling
+repository's rule test script.
+
+The script owns the repo-specific part: which templates and values it
+renders, and any extra checks. The workflow fails the job when:
+
+* any download does not match its checksum;
+* the script exits non-zero (a promtool failure included);
+* any test file's `rule_files` pattern matches no file. promtool only warns
+  about this and exits 0, and a test that expects no alert then passes
+  against an empty rule set;
+* promtool did not report `SUCCESS` for every `*.test.yaml` in `tests-dir`.
+  The script must therefore let promtool's output through.
+
+```yaml
+  alert-rules:
+    name: Alert Rules Gate
+    uses: kupecloud/github-workflows/.github/workflows/promtool-rules.yaml@<full-commit-sha>
+    with:
+      runs-on: kupe-small
+      # Optional: lint LogQL rules with lokitool after the promtool tests.
+      # loki-rules-script: scripts/lint-loki-rules.sh
+```
+
+To bump a tool, change its version and checksum inputs together. Take the
+checksum from the release's own file: `checksums` for yq (the SHA-256 column
+given by `checksums_hashes_order`), `sha256sums.txt` for Prometheus, and
+`SHA256SUMS` for Loki.

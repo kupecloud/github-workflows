@@ -1,0 +1,202 @@
+name: Promtool Rules
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: >-
+          Runner label. Defaults to ubuntu-latest. Override to a self-hosted
+          runner label if you want to run CI on your own scale set.
+        required: false
+        default: ubuntu-latest
+        type: string
+      script:
+        description: >-
+          Repository script, run with bash from the repository root, that
+          renders the chart's alert rules and runs `promtool test rules` over
+          the test files. It must let promtool's output through: the gate
+          counts promtool's per-file SUCCESS lines in it.
+        required: false
+        default: scripts/test-alert-rules.sh
+        type: string
+      tests-dir:
+        description: >-
+          Directory holding the promtool `*.test.yaml` files. The job fails
+          unless promtool reported SUCCESS for every one of them.
+        required: false
+        default: tests/promtool
+        type: string
+      helm-version:
+        description: Helm version used to render the chart
+        required: false
+        default: v4.3.0
+        type: string
+      yq-version:
+        description: yq release to install (linux amd64 binary)
+        required: false
+        default: v4.52.5
+        type: string
+      yq-sha256:
+        description: >-
+          SHA-256 of yq_linux_amd64 for yq-version, from that release's
+          `checksums` file (SHA-256 column, see `checksums_hashes_order`).
+          Change it together with yq-version.
+        required: false
+        default: 75d893a0d5940d1019cb7cdc60001d9e876623852c31cfc6267047bc31149fa9
+        type: string
+      prometheus-version:
+        description: Prometheus release whose tarball supplies promtool
+        required: false
+        default: v3.5.0
+        type: string
+      prometheus-sha256:
+        description: >-
+          SHA-256 of prometheus-<version>.linux-amd64.tar.gz for
+          prometheus-version, from that release's `sha256sums.txt`. Change it
+          together with prometheus-version.
+        required: false
+        default: e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a
+        type: string
+      loki-rules-script:
+        description: >-
+          Optional repository script that lints LogQL alert rules with
+          lokitool. When set, lokitool is installed and the script runs after
+          the promtool tests. Empty skips both.
+        required: false
+        default: ""
+        type: string
+      lokitool-version:
+        description: Loki release whose zip supplies lokitool
+        required: false
+        default: v3.5.3
+        type: string
+      lokitool-sha256:
+        description: >-
+          SHA-256 of lokitool-linux-amd64.zip for lokitool-version, from that
+          release's `SHA256SUMS`. Change it together with lokitool-version.
+        required: false
+        default: 6d70bf1581bce14d6a1337b5a3dd9ecee24fdeeeac019ac2ee3d7f456475cd35
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promtool-rules:
+    name: promtool rules
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ inputs.helm-version }}
+
+      - name: Install yq, promtool and lokitool
+        # Every download is checked against the SHA-256 its upstream release
+        # publishes before it is unpacked or run, so a swapped or truncated
+        # asset fails the job instead of running. Installs to a user-writable
+        # location for self-hosted runners without passwordless sudo.
+        shell: bash
+        env:
+          YQ_VERSION: ${{ inputs.yq-version }}
+          YQ_SHA256: ${{ inputs.yq-sha256 }}
+          PROMETHEUS_VERSION: ${{ inputs.prometheus-version }}
+          PROMETHEUS_SHA256: ${{ inputs.prometheus-sha256 }}
+          LOKI_RULES_SCRIPT: ${{ inputs.loki-rules-script }}
+          LOKITOOL_VERSION: ${{ inputs.lokitool-version }}
+          LOKITOOL_SHA256: ${{ inputs.lokitool-sha256 }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/bin"
+          dl="$(mktemp -d -p "$RUNNER_TEMP")"
+          mkdir -p "$bin"
+
+          # fetch <url> <sha256> <file>: download, then verify or fail.
+          fetch() {
+            if ! [[ "$2" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::expected a 64-character lowercase hex sha256 for $1, got '$2'"
+              exit 1
+            fi
+            curl -fsSLo "$3" "$1"
+            echo "$2  $3" | sha256sum --check --strict -
+          }
+
+          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+            "$YQ_SHA256" "$dl/yq"
+          install -m 0755 "$dl/yq" "$bin/yq"
+
+          prometheus="prometheus-${PROMETHEUS_VERSION#v}.linux-amd64"
+          fetch "https://github.com/prometheus/prometheus/releases/download/${PROMETHEUS_VERSION}/${prometheus}.tar.gz" \
+            "$PROMETHEUS_SHA256" "$dl/prometheus.tar.gz"
+          tar -xzf "$dl/prometheus.tar.gz" -C "$dl" "$prometheus/promtool"
+          install -m 0755 "$dl/$prometheus/promtool" "$bin/promtool"
+
+          if [ -n "$LOKI_RULES_SCRIPT" ]; then
+            fetch "https://github.com/grafana/loki/releases/download/${LOKITOOL_VERSION}/lokitool-linux-amd64.zip" \
+              "$LOKITOOL_SHA256" "$dl/lokitool.zip"
+            unzip -oq "$dl/lokitool.zip" lokitool-linux-amd64 -d "$dl"
+            install -m 0755 "$dl/lokitool-linux-amd64" "$bin/lokitool"
+          fi
+
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: promtool alert rule tests
+        id: promtool
+        shell: bash
+        env:
+          SCRIPT: ${{ inputs.script }}
+          TESTS_DIR: ${{ inputs.tests-dir }}
+        run: |
+          set -euo pipefail
+          want="$(find "$TESTS_DIR" -maxdepth 1 -name '*.test.yaml' | wc -l | tr -d ' ')"
+          if [ "$want" -eq 0 ]; then
+            echo "::error::no *.test.yaml files in $TESTS_DIR"
+            exit 1
+          fi
+
+          log="$RUNNER_TEMP/promtool-rules.log"
+          bash "$SCRIPT" 2>&1 | tee "$log"
+
+          # promtool exits 0 for a test file whose rule_files pattern matches
+          # nothing: it warns, loads no rules, and any test expecting no alert
+          # passes against the empty rule set. Fail on the warning, then make
+          # sure every test file reported SUCCESS.
+          if grep -n 'no file match pattern' "$log"; then
+            echo "::error::a rule_files path in $TESTS_DIR matches no file (paths are relative to the test file)"
+            exit 1
+          fi
+          got="$(grep -c -E '^[[:space:]]*SUCCESS[[:space:]]*$' "$log" || true)"
+          if [ "$got" -ne "$want" ]; then
+            echo "::error::promtool reported SUCCESS for $got of $want test file(s) in $TESTS_DIR"
+            exit 1
+          fi
+          echo "promtool-rules: $got/$want test files passed"
+
+      - name: LogQL rules lint
+        id: loki
+        if: inputs.loki-rules-script != ''
+        shell: bash
+        env:
+          LOKI_RULES_SCRIPT: ${{ inputs.loki-rules-script }}
+        run: bash "$LOKI_RULES_SCRIPT"
+
+      - name: promtool rules summary
+        if: always()
+        run: |
+          {
+            echo "### promtool rules"
+            if [ "${{ steps.promtool.outcome }}" = "success" ]; then
+              echo "promtool alert rule tests passed."
+            else
+              echo "promtool alert rule tests failed."
+              echo ""
+              echo "- Review the job logs for details."
+            fi
+            case "${{ steps.loki.outcome }}" in
+              success) echo "LogQL rules lint passed." ;;
+              failure) echo "LogQL rules lint failed." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -24,6 +24,24 @@ on:
         required: false
         default: "audit"
         type: string
+      helm-version:
+        description: Helm version used to render the chart
+        required: false
+        default: v4.3.0
+        type: string
+      yq-version:
+        description: yq release to install (linux amd64 binary)
+        required: false
+        default: v4.52.5
+        type: string
+      yq-sha256:
+        description: >-
+          SHA-256 of yq_linux_amd64 for yq-version, from that release's
+          `checksums` file (SHA-256 column, see `checksums_hashes_order`).
+          Change it together with yq-version.
+        required: false
+        default: 75d893a0d5940d1019cb7cdc60001d9e876623852c31cfc6267047bc31149fa9
+        type: string
 
 permissions:
   contents: read
@@ -39,27 +57,56 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
-          version: v4.3.0
+          version: ${{ inputs.helm-version }}
 
       - name: Install yq
-        # Install to a user-writable location so this works on minimal
-        # self-hosted runner images that don't grant passwordless sudo.
+        # The download is checked against the SHA-256 its upstream release
+        # publishes before it is run, so a swapped or truncated asset fails the
+        # job instead of auditing with it. Installs to a user-writable location
+        # for self-hosted runners without passwordless sudo.
+        shell: bash
+        env:
+          YQ_VERSION: ${{ inputs.yq-version }}
+          YQ_SHA256: ${{ inputs.yq-sha256 }}
         run: |
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSLo "$HOME/.local/bin/yq" https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64
-          chmod +x "$HOME/.local/bin/yq"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+          bin="$RUNNER_TEMP/bin"
+          dl="$(mktemp -d -p "$RUNNER_TEMP")"
+          mkdir -p "$bin"
+
+          # fetch <url> <sha256> <file>: download, then verify or fail.
+          fetch() {
+            if ! [[ "$2" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::expected a 64-character lowercase hex sha256 for $1, got '$2'"
+              exit 1
+            fi
+            curl -fsSLo "$3" "$1"
+            echo "$2  $3" | sha256sum --check --strict -
+          }
+
+          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+            "$YQ_SHA256" "$dl/yq"
+          install -m 0755 "$dl/yq" "$bin/yq"
+          echo "$bin" >> "$GITHUB_PATH"
 
       - name: Render chart
         shell: bash
         env:
           RELEASE_NAME: ${{ inputs.release-name }}
           CHART_PATH: ${{ inputs.chart-path }}
-        run: helm template "$RELEASE_NAME" "$CHART_PATH" ${{ inputs.template-args }} > /tmp/rendered.yaml
+          TEMPLATE_ARGS: ${{ inputs.template-args }}
+        run: |
+          set -euo pipefail
+          # template-args has always been shell words (quotes and $VARS
+          # included), so it is parsed into an argument list here exactly as
+          # it was when the input was pasted into the command line.
+          eval "args=($TEMPLATE_ARGS)"
+          helm template "$RELEASE_NAME" "$CHART_PATH" "${args[@]}" > "$RUNNER_TEMP/rendered.yaml"
 
       - name: Audit pod token automount
         shell: bash
         run: |
+          set -euo pipefail
           # Covers workload controllers (Deployment/StatefulSet/DaemonSet/Job),
           # ARC runner scale sets (AutoscalingRunnerSet — its pod spec lives at
           # .spec.template.spec, same as a Deployment), bare Pods (whose
@@ -68,7 +115,7 @@ jobs:
           # Job/CronJob emits a false all-clear the day a chart adds a migration
           # Job or cleanup CronJob with default token automount.
           # No `|| true`: a yq error (parse failure, expression regression after
-          # a yq bump, missing /tmp/rendered.yaml) must fail the step rather
+          # a yq bump, missing rendered.yaml) must fail the step rather
           # than swallow into an empty result that prints a false all-clear.
           # `yq -N` already exits 0 with no output when nothing matches.
           # shellcheck disable=SC2016
@@ -84,7 +131,7 @@ jobs:
                )}
             | select(.automount != false)
             | .name' \
-            /tmp/rendered.yaml | sort -u)
+            "$RUNNER_TEMP/rendered.yaml" | sort -u)
           {
             echo "### Pod Token Automount Audit"
             if [ -z "$automounts" ]; then

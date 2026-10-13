@@ -72,11 +72,14 @@ jobs:
 
       - name: Run build
         id: build
-        run: npm run ${{ inputs.build-script }}
+        env:
+          BUILD_SCRIPT: ${{ inputs.build-script }}
+        run: npm run "$BUILD_SCRIPT"
 
       - name: Build summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.build.outcome }}" = "success" ]; then
             {
               echo "### Build"

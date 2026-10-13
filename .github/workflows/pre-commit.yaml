@@ -109,11 +109,20 @@ jobs:
       - name: Run pre-commit
         id: pre-commit
         shell: bash
-        run: pre-commit run ${{ inputs.args }}
+        env:
+          PRE_COMMIT_ARGS: ${{ inputs.args }}
+        run: |
+          set -euo pipefail
+          # args has always been shell words (quotes and $VARS included), so
+          # it is parsed into an argument list here exactly as it was when the
+          # input was pasted into the command line.
+          eval "args=($PRE_COMMIT_ARGS)"
+          pre-commit run "${args[@]}"
 
       - name: pre-commit summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.pre-commit.outcome }}" = "success" ]; then
             {
               echo "### pre-commit"

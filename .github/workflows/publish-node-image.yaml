@@ -79,7 +79,9 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run ${{ inputs.build-script }}
+        env:
+          BUILD_SCRIPT: ${{ inputs.build-script }}
+        run: npm run "$BUILD_SCRIPT"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
@@ -131,6 +133,7 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          set -euo pipefail
           # --new-bundle-format=false: sign with the legacy tag-based .sig
           # format, NOT the sigstore bundle. GHCR does not serve the OCI
           # referrers API (404 MANIFEST_UNKNOWN even when the fallback tag

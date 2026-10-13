@@ -186,6 +186,7 @@ jobs:
       - name: promtool rules summary
         if: always()
         run: |
+          set -euo pipefail
           {
             echo "### promtool rules"
             if [ "${{ steps.promtool.outcome }}" = "success" ]; then

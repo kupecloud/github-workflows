@@ -58,23 +58,25 @@ jobs:
       - name: Run unit tests
         id: unit
         shell: bash
+        env:
+          TEST_SCRIPT: ${{ inputs.test-script }}
         run: |
-          set +e
-          npm run ${{ inputs.test-script }}
-          EXIT_CODE=$?
-          set -e
-          exit $EXIT_CODE
+          set -euo pipefail
+          npm run "$TEST_SCRIPT"
 
       - name: Unit test summary
         if: always()
         shell: bash
+        env:
+          TEST_SCRIPT: ${{ inputs.test-script }}
         run: |
+          set -euo pipefail
           {
             echo "### Unit tests"
             echo ""
             echo "| Check | Result |"
             echo "| --- | --- |"
-            echo "| npm run ${{ inputs.test-script }} | ${{ steps.unit.outcome }} |"
+            echo "| npm run ${TEST_SCRIPT} | ${{ steps.unit.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage report

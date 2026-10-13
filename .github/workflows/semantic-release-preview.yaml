@@ -69,6 +69,7 @@ jobs:
           # instead of the mutable `main` branch. Mirrors go-lint.yaml.
           JOB_WORKFLOW_SHA: ${{ github.job_workflow_sha }}
         run: |
+          set -euo pipefail
           if [ -f .releaserc.json ]; then
             echo "Using repository .releaserc.json"
             exit 0
@@ -120,6 +121,7 @@ jobs:
         id: preview
         shell: bash
         run: |
+          set -euo pipefail
           if [ -n "${{ steps.semantic.outputs.new_release_version }}" ]; then
             echo "new_release_published=true" >> "$GITHUB_OUTPUT"
           else

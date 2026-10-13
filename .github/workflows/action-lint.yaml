@@ -43,8 +43,11 @@ jobs:
 
       - name: Install actionlint
         shell: bash
+        env:
+          ACTIONLINT_VERSION: ${{ inputs.actionlint-version }}
         run: |
-          GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@${{ inputs.actionlint-version }}
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Run actionlint
@@ -54,6 +57,7 @@ jobs:
       - name: actionlint summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.actionlint.outcome }}" = "success" ]; then
             {
               echo "### actionlint"

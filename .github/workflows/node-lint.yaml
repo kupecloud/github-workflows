@@ -57,11 +57,14 @@ jobs:
 
       - name: Run eslint
         id: eslint
-        run: npm run ${{ inputs.lint-script }}
+        env:
+          LINT_SCRIPT: ${{ inputs.lint-script }}
+        run: npm run "$LINT_SCRIPT"
 
       - name: eslint summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.eslint.outcome }}" = "success" ]; then
             {
               echo "### eslint"
@@ -98,11 +101,14 @@ jobs:
 
       - name: Run tsc
         id: tsc
-        run: npm run ${{ inputs.tsc-script }}
+        env:
+          TSC_SCRIPT: ${{ inputs.tsc-script }}
+        run: npm run "$TSC_SCRIPT"
 
       - name: tsc summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.tsc.outcome }}" = "success" ]; then
             {
               echo "### tsc"

@@ -55,17 +55,31 @@ jobs:
 
       - name: Install gosec
         shell: bash
+        env:
+          GOSEC_VERSION: ${{ inputs.gosec-version }}
         run: |
-          GOBIN="$RUNNER_TEMP/bin" go install github.com/securego/gosec/v2/cmd/gosec@${{ inputs.gosec-version }}
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION}"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Run gosec
         id: gosec
-        run: gosec ${{ inputs.gosec-args }}
+        shell: bash
+        env:
+          GOSEC_ARGS: ${{ inputs.gosec-args }}
+        run: |
+          set -euo pipefail
+          # gosec-args has always been shell words: callers pass quotes and
+          # $VARS (e.g. "$GITHUB_WORKSPACE"/e2e/...), so it is parsed into an
+          # argument list here exactly as it was when the input was pasted
+          # into the command line.
+          eval "args=($GOSEC_ARGS)"
+          gosec "${args[@]}"
 
       - name: gosec summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.gosec.outcome }}" = "success" ]; then
             {
               echo "### gosec"
@@ -95,19 +109,28 @@ jobs:
 
       - name: Install govulncheck
         shell: bash
+        env:
+          GOVULNCHECK_VERSION: ${{ inputs.govulncheck-version }}
         run: |
-          GOBIN="$RUNNER_TEMP/bin" go install golang.org/x/vuln/cmd/govulncheck@${{ inputs.govulncheck-version }}
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/bin" go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Run govulncheck
         shell: bash
+        env:
+          GOVULNCHECK_ARGS: ${{ inputs.govulncheck-args }}
         run: |
+          set -euo pipefail
+          # govulncheck-args has always been shell words, so it is parsed into
+          # an argument list exactly as it was when pasted into the command.
+          eval "args=($GOVULNCHECK_ARGS)"
           set +e
-          govulncheck ${{ inputs.govulncheck-args }} 2>&1 | tee govulncheck-output.txt
+          govulncheck "${args[@]}" 2>&1 | tee govulncheck-output.txt
           EXIT_CODE=$?
           set -e
 
-          PARSED="$(mktemp)"
+          PARSED="$(mktemp -p "$RUNNER_TEMP")"
           summary() {
             printf '%s\n' "$*" >> "$GITHUB_STEP_SUMMARY"
           }
@@ -195,8 +218,9 @@ jobs:
           END { flush() }
           ' govulncheck-output.txt > "$PARSED"
 
-          declare -A VULN_DESC VULN_URL VULN_MODULE VULN_FOUND VULN_FIXED VULN_CALLED
-          declare -A VULN_TRACES VULN_TRACE_COUNT MODULES_CALLED
+          # Initialise with =() so set -u treats the empty arrays as set.
+          declare -A VULN_DESC=() VULN_URL=() VULN_MODULE=() VULN_FOUND=() VULN_FIXED=() VULN_CALLED=()
+          declare -A VULN_TRACES=() VULN_TRACE_COUNT=() MODULES_CALLED=()
           ORDER=()
 
           while IFS=$'\t' read -r record_type id field1 field2 field3 field4 field5 field6; do
@@ -210,7 +234,7 @@ jobs:
               VULN_CALLED["$id"]="$field6"
             elif [ "$record_type" = "TRACE" ]; then
               VULN_TRACE_COUNT["$id"]=$(( ${VULN_TRACE_COUNT[$id]:-0} + 1 ))
-              if [ -n "${VULN_TRACES[$id]}" ]; then
+              if [ -n "${VULN_TRACES[$id]:-}" ]; then
                 VULN_TRACES["$id"]+=$'\n'"$field1"
               else
                 VULN_TRACES["$id"]="$field1"

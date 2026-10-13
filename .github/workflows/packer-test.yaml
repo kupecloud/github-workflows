@@ -53,6 +53,7 @@ jobs:
           PROVIDER_ENV_VAR: ${{ inputs.provider_env_var }}
           PROVIDER_TOKEN: ${{ secrets.provider_token }}
         run: |
+          set -euo pipefail
           # Randomized heredoc delimiter per GitHub's own guidance, so a token
           # value can never smuggle a matching terminator line into GITHUB_ENV.
           DELIM="PROVIDER_TOKEN_EOF_$(openssl rand -hex 16)"
@@ -67,4 +68,5 @@ jobs:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SEMANTIC_VERSION: ${{ inputs.semantic_version }}
           ENV: ${{ inputs.env }}
-        run: ${{ inputs.test_script }}
+          TEST_SCRIPT: ${{ inputs.test_script }}
+        run: '"$TEST_SCRIPT"'

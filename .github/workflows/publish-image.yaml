@@ -107,6 +107,7 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          set -euo pipefail
           # --new-bundle-format=false: sign with the legacy tag-based .sig
           # format, NOT the sigstore bundle. GHCR does not serve the OCI
           # referrers API (404 MANIFEST_UNKNOWN even when the fallback tag

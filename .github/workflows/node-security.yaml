@@ -58,26 +58,29 @@ jobs:
       - name: Run npm audit
         id: audit
         shell: bash
+        env:
+          AUDIT_LEVEL: ${{ inputs.audit-level }}
+          AUDIT_OMIT: ${{ inputs.audit-omit }}
         run: |
-          set +e
-          npm audit --audit-level=${{ inputs.audit-level }} --omit=${{ inputs.audit-omit }}
-          EXIT_CODE=$?
-          set -e
-          exit $EXIT_CODE
+          set -euo pipefail
+          npm audit --audit-level="$AUDIT_LEVEL" --omit="$AUDIT_OMIT"
 
       - name: npm audit summary
         if: always()
         shell: bash
+        env:
+          AUDIT_LEVEL: ${{ inputs.audit-level }}
         run: |
+          set -euo pipefail
           if [ "${{ steps.audit.outcome }}" = "success" ]; then
             {
               echo "### npm audit"
-              echo "No production dependency vulnerabilities at level \`${{ inputs.audit-level }}\` or above."
+              echo "No production dependency vulnerabilities at level \`${AUDIT_LEVEL}\` or above."
             } >> "$GITHUB_STEP_SUMMARY"
           else
             {
               echo "### npm audit"
-              echo "Production dependency vulnerabilities found at level \`${{ inputs.audit-level }}\` or above."
+              echo "Production dependency vulnerabilities found at level \`${AUDIT_LEVEL}\` or above."
               echo ""
               echo "- Review the job logs for the full advisory list."
               echo "- Run \`npm audit fix\` locally to apply available patches."

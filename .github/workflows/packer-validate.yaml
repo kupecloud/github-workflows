@@ -55,18 +55,23 @@ jobs:
       - name: Packer init
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: packer init ${{ inputs.packer_dir }}
+          PACKER_DIR: ${{ inputs.packer_dir }}
+        run: packer init "$PACKER_DIR"
 
       - name: Packer fmt
-        run: packer fmt -check -diff ${{ inputs.packer_dir }}
+        env:
+          PACKER_DIR: ${{ inputs.packer_dir }}
+        run: packer fmt -check -diff "$PACKER_DIR"
 
       - name: Packer validate
         env:
           VALIDATE_VARS: ${{ inputs.validate_vars }}
+          PACKER_DIR: ${{ inputs.packer_dir }}
         run: |
+          set -euo pipefail
           args=()
           while IFS= read -r line; do
             [ -z "$line" ] && continue
             args+=(-var "$line")
           done <<< "$VALIDATE_VARS"
-          packer validate "${args[@]}" ${{ inputs.packer_dir }}
+          packer validate "${args[@]}" "$PACKER_DIR"

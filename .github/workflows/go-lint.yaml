@@ -60,9 +60,11 @@ jobs:
           # for the script to pin the shared config to this reusable workflow's
           # commit instead of always falling back to mutable `main`.
           JOB_WORKFLOW_SHA: ${{ github.job_workflow_sha }}
+          GOLANGCI_VERSION: ${{ inputs.golangci-version }}
         run: |
+          set -euo pipefail
           if [ ! -f .golangci.yaml ] && [ ! -f .golangci.yml ] && [ ! -f .golangci.json ] && [ ! -f .golangci.toml ]; then
-            VERSION="${{ inputs.golangci-version }}"
+            VERSION="$GOLANGCI_VERSION"
             if [[ "$VERSION" != v2.* ]]; then
               echo "No default config available for golangci-lint v1 — using built-in defaults"
               exit 0
@@ -87,8 +89,11 @@ jobs:
 
       - name: Install golangci-lint
         shell: bash
+        env:
+          GOLANGCI_VERSION: ${{ inputs.golangci-version }}
         run: |
-          VERSION="${{ inputs.golangci-version }}"
+          set -euo pipefail
+          VERSION="$GOLANGCI_VERSION"
           if [[ "$VERSION" == v2.* ]]; then
             MODULE="github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
           else
@@ -99,11 +104,21 @@ jobs:
 
       - name: Run golangci-lint
         id: golangci
-        run: golangci-lint run ${{ inputs.golangci-args }}
+        shell: bash
+        env:
+          GOLANGCI_ARGS: ${{ inputs.golangci-args }}
+        run: |
+          set -euo pipefail
+          # golangci-args has always been shell words (quotes and $VARS
+          # included), so it is parsed into an argument list here exactly as
+          # it was when the input was pasted into the command line.
+          eval "args=($GOLANGCI_ARGS)"
+          golangci-lint run "${args[@]}"
 
       - name: golangci-lint summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.golangci.outcome }}" = "success" ]; then
             {
               echo "Go linting passed."
@@ -140,13 +155,16 @@ jobs:
 
       - name: Dockerfile builder >= go.mod
         run: |
+          set -euo pipefail
           if [ ! -f Dockerfile ] || [ ! -f go.mod ]; then
             echo "No Dockerfile or go.mod — nothing to check."
             exit 0
           fi
 
-          gomod=$(grep -oE '^go [0-9]+(\.[0-9]+)*' go.mod | head -1 | awk '{print $2}')
-          builder=$(grep -oE 'golang:[0-9]+(\.[0-9]+)*' Dockerfile | head -1 | cut -d: -f2)
+          # `|| true`: no match must reach the "could not parse" skip below,
+          # not fail the step through pipefail.
+          gomod=$(grep -oE '^go [0-9]+(\.[0-9]+)*' go.mod | head -1 | awk '{print $2}' || true)
+          builder=$(grep -oE 'golang:[0-9]+(\.[0-9]+)*' Dockerfile | head -1 | cut -d: -f2 || true)
 
           if [ -z "$gomod" ] || [ -z "$builder" ]; then
             echo "Could not parse versions (go.mod='$gomod' builder='$builder') — skipping."
@@ -180,6 +198,7 @@ jobs:
       - name: Check formatting
         id: gofmt
         run: |
+          set -euo pipefail
           find . -path ./vendor -prune -o -name '*.go' -exec gofmt -l {} + > gofmt-files.txt
           if [ -s gofmt-files.txt ]; then
             echo "The following files are not formatted correctly:"
@@ -192,6 +211,7 @@ jobs:
       - name: gofmt summary
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.gofmt.outcome }}" = "success" ]; then
             {
               echo "Go formatting passed."

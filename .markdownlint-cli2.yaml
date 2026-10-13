@@ -1,3 +1,6 @@
 config:
   MD013: false
   MD004: false
+  # Each workflow section has its own "### Inputs" (and Outputs/Secrets).
+  MD024:
+    siblings_only: true

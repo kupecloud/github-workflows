@@ -1,0 +1,38 @@
+# Fixture for tests/check_regex_fixtures.py — the shape of a reusable workflow
+# whose tool versions are workflow_call input defaults. Exercises the
+# workflow input-default custom manager in default.json:
+#
+#   - helm-version carries a `# renovate:` marker directly above its default
+#     and must extract as helm/helm v4.3.0
+#   - yq-version has no marker (its yq-sha256 would go stale on a
+#     version-only bump) and must NOT match
+#   - lokitool-version has a marker that is NOT directly above its default,
+#     so it must NOT bind
+name: Tool versions fixture
+
+on:
+  workflow_call:
+    inputs:
+      helm-version:
+        description: Helm version used to render the chart
+        required: false
+        # renovate: github-releases=helm/helm
+        default: v4.3.0
+        type: string
+      yq-version:
+        description: yq release to install (linux amd64 binary)
+        required: false
+        default: v4.52.5
+        type: string
+      lokitool-version:
+        # renovate: github-releases=grafana/loki
+        description: Loki release whose zip supplies lokitool
+        required: false
+        default: v3.5.3
+        type: string
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Fixture tests for the argocd prod-pin custom manager in renovate/default.json.
+"""Fixture tests for custom managers in renovate/default.json.
 
 Reads the managerFilePatterns regex and matchString straight from default.json
-(no duplicated regex to drift) and asserts against tests/fixtures/values/prod.yaml:
+(no duplicated regex to drift).
+
+argocd prod-pin manager, against tests/fixtures/values/prod.yaml:
 
   1. managerFilePatterns matches the file where it actually lives in
      kupecloud/argocd (values/prod.yaml at repo root) and not dev values files.
   2. matchString extracts exactly the real (uncommented) entries — a
      commented-out example repoURL must never cross-bind to a real
      gitRevision line (review-fable-2 HIGH-1/HIGH-2 regressions).
+
+workflow input-default manager, against tests/fixtures/workflows/tool-versions.yaml
+and this repo's own .github/workflows:
+
+  3. managerFilePatterns matches workflow files at the repo root only.
+  4. matchString extracts helm/helm v4.3.0 from a marked `default:` and does
+     not match an unmarked default or a marker that is not directly above one.
+  5. Every reusable workflow with a helm-version input is tracked, and nothing
+     but helm/helm is: the yq/prometheus/lokitool versions are paired with a
+     sha256 input that a version-only Renovate bump would leave stale.
 
 Renovate compiles matchStrings with RE2; the syntax used here ((?sm), ^, \\s,
 character classes, lazy .*?) is common to RE2 and Python re. Python requires
@@ -41,21 +53,28 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 config = json.loads((REPO_ROOT / "default.json").read_text())
+
+
+def manager_regexes(manager: dict) -> tuple[str, str]:
+    """Return (file_match, match_string) as Python regexes.
+
+    managerFilePatterns entries are Renovate `/regex/` values (post config
+    migration). Strip the delimiters to recover the raw regex, which carries
+    the same semantics as the pre-migration fileMatch.
+    """
+    pattern = manager["managerFilePatterns"][0]
+    file_match = (
+        pattern[1:-1] if pattern.startswith("/") and pattern.endswith("/") else pattern
+    )
+    return file_match, manager["matchStrings"][0].replace("(?<", "(?P<")
+
+
 manager = next(
     m
     for m in config["customManagers"]
     if m.get("datasourceTemplate") == "github-releases"
 )
-# managerFilePatterns entries are Renovate `/regex/` values (post config
-# migration). Strip the delimiters to recover the raw regex, which carries the
-# same semantics as the pre-migration fileMatch.
-_pattern = manager["managerFilePatterns"][0]
-file_match = (
-    _pattern[1:-1]
-    if _pattern.startswith("/") and _pattern.endswith("/")
-    else _pattern
-)
-match_string = manager["matchStrings"][0].replace("(?<", "(?P<")
+file_match, match_string = manager_regexes(manager)
 
 # --- 1. managerFilePatterns behaves like Renovate's (regex over repo-relative path) ---
 check(
@@ -94,6 +113,81 @@ for pkg in sorted(MUST_NOT_BIND):
         pkg not in bound_packages,
         f"{pkg} cross-bound: {extracted!r}",
     )
+
+# --- 3-5. workflow input-default manager ---
+WORKFLOWS_DIR = REPO_ROOT.parent / ".github" / "workflows"
+WORKFLOW_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "workflows" / "tool-versions.yaml"
+HELM_WORKFLOWS = (
+    "helm-lint.yaml",
+    "helm-rbac-audit.yaml",
+    "helm-automount-audit.yaml",
+    "promtool-rules.yaml",
+)
+
+workflow_manager = next(
+    m
+    for m in config["customManagers"]
+    if any(".github/workflows" in p for p in m["managerFilePatterns"])
+)
+wf_file_match, wf_match_string = manager_regexes(workflow_manager)
+
+
+def extract_defaults(text: str) -> list[tuple[str, str]]:
+    return [
+        (m.group("depName"), m.group("currentValue"))
+        for m in re.finditer(wf_match_string, text)
+    ]
+
+
+for target in (".github/workflows/helm-lint.yaml", ".github/workflows/ci.yml"):
+    check(
+        f"workflow managerFilePatterns matches {target}",
+        re.search(wf_file_match, target) is not None,
+        wf_file_match,
+    )
+for non_target in (
+    "values.yaml",
+    ".github/workflows/sub/x.yaml",
+    "foo/.github/workflows/x.yaml",
+    ".github/actions/tofu/action.yaml",
+):
+    check(
+        f"workflow managerFilePatterns does NOT match {non_target}",
+        re.search(wf_file_match, non_target) is None,
+        wf_file_match,
+    )
+
+wf_extracted = extract_defaults(WORKFLOW_FIXTURE.read_text())
+check(
+    "workflow matchString extracts exactly helm/helm v4.3.0 from the fixture",
+    wf_extracted == [("helm/helm", "v4.3.0")],
+    f"got {wf_extracted!r}",
+)
+check(
+    "unmarked yq-version default does not match",
+    all(value != "v4.52.5" for _, value in wf_extracted),
+    f"got {wf_extracted!r}",
+)
+check(
+    "marker not directly above a default does not bind",
+    all(dep != "grafana/loki" for dep, _ in wf_extracted),
+    f"got {wf_extracted!r}",
+)
+
+for workflow in sorted(WORKFLOWS_DIR.glob("*.y*ml")):
+    found = extract_defaults(workflow.read_text())
+    if workflow.name in HELM_WORKFLOWS:
+        check(
+            f"{workflow.name} helm-version default is tracked",
+            [dep for dep, _ in found] == ["helm/helm"],
+            f"got {found!r}",
+        )
+    else:
+        check(
+            f"{workflow.name} has no marked default",
+            found == [],
+            f"got {found!r}",
+        )
 
 if failures:
     print(f"\n{len(failures)} fixture assertion(s) failed", file=sys.stderr)

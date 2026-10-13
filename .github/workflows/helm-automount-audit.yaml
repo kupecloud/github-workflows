@@ -27,6 +27,7 @@ on:
       helm-version:
         description: Helm version used to render the chart
         required: false
+        # renovate: github-releases=helm/helm
         default: v4.3.0
         type: string
       yq-version:

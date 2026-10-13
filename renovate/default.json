@@ -93,6 +93,17 @@
         "#\\s*renovate:\\s*github-releases=(?<depName>kupecloud/[a-zA-Z0-9_-]+)[^\\n]*\\n\\s*targetRevision:\\s*[\"']?(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)[\"']?"
       ],
       "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "Tool versions held in a reusable workflow's input `default:` — kupecloud/github-workflows' helm-lint, helm-rbac-audit, helm-automount-audit and promtool-rules take `helm-version` (default helm/helm vX.Y.Z) and pass `${{ inputs.helm-version }}` to azure/setup-helm. The github-actions manager only bumps a literal `with: version:` (it took these v3.18.6 -> v4.3.0 in 0041732); once the version became an input expression nothing tracked it and it would have frozen silently. The dependency is declared on the line DIRECTLY above the `default:` with a `# renovate: github-releases=<owner>/<repo>` marker (same convention as the chart targetRevision pins); unmarked defaults never bind. Mark only versions with no paired checksum: yq-version, prometheus-version and lokitool-version are deliberately unmarked because each download is verified against a `<tool>-sha256` input that a version-only bump would leave stale, failing every consumer's job — bump those by hand, version and sha256 together. Added 2026-10-13.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "#[ \\t]*renovate:[ \\t]*github-releases=(?<depName>[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)[^\\n]*\\n[ \\t]*default:[ \\t]*[\"']?(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)[\"']?"
+      ],
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [

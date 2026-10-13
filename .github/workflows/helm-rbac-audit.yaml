@@ -75,17 +75,25 @@ jobs:
           dl="$(mktemp -d -p "$RUNNER_TEMP")"
           mkdir -p "$bin"
 
-          # fetch <url> <sha256> <file>: download, then verify or fail.
+          # fetch <tool> <url> <sha256> <file>: download, then verify or fail.
+          # <tool> is the prefix of the <tool>-version / <tool>-sha256 inputs,
+          # so a mismatch tells the caller which pair to change.
           fetch() {
-            if ! [[ "$2" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "::error::expected a 64-character lowercase hex sha256 for $1, got '$2'"
+            local tool="$1" url="$2" want="$3" file="$4" got
+            if ! [[ "$want" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::${tool}-sha256 must be a 64-character lowercase hex sha256, got '$want'"
               exit 1
             fi
-            curl -fsSLo "$3" "$1"
-            echo "$2  $3" | sha256sum --check --strict -
+            curl -fsSLo "$file" "$url"
+            got="$(sha256sum < "$file")"
+            got="${got%% *}"
+            if [ "$got" != "$want" ]; then
+              echo "::error::${tool} sha256 mismatch for $url: expected $want, got $got. Set the ${tool}-sha256 input together with ${tool}-version."
+              exit 1
+            fi
           }
 
-          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+          fetch yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
             "$YQ_SHA256" "$dl/yq"
           install -m 0755 "$dl/yq" "$bin/yq"
           echo "$bin" >> "$GITHUB_PATH"
